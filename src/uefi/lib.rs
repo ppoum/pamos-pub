@@ -30,15 +30,24 @@ impl CStr16 {
 #[repr(transparent)]
 pub struct Handle(NonNull<c_void>);
 
+#[repr(transparent)]
+pub struct SystemTable(*const RawSystemTable);
+
+impl SystemTable {
+    pub fn stdout(&mut self) -> &mut Output {
+        unsafe { &mut *(*self.0).con_out }
+    }
+}
+
 #[repr(C)]
-pub struct SystemTable {
+struct RawSystemTable {
     hdr: TableHeader,
     firmware_vendor: usize, // TODO CStr
     firmware_revision: u32,
     console_in_handle: Handle,
     con_in: usize, // TODO
     console_out_handle: Handle,
-    pub con_out: *mut Output,
+    con_out: *mut Output,
     std_err_handle: Handle,
     std_err: usize,
     runtime_services: usize, // TODO

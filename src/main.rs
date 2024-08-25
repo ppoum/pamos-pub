@@ -10,9 +10,8 @@ fn _panic_handler(_: &core::panic::PanicInfo) -> ! {
 }
 
 #[no_mangle]
-pub extern "efiapi" fn efi_main(_image_handle: Handle, system_table: &SystemTable) -> Status {
+pub extern "efiapi" fn efi_main(_image_handle: Handle, mut system_table: SystemTable) -> Status {
     let s = cstr16!("Hello, World!\n");
-    let x = unsafe { &mut *system_table.con_out };
-    x.write(s);
+    system_table.stdout().write(s);
     0
 }
