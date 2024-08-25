@@ -11,6 +11,7 @@ doctest = false
 bench = false
 
 [lib]
+name = "uefi"
 path = "src/uefi/lib.rs"
 
 [profile.dev]
@@ -23,3 +24,4 @@ panic = "abort"
 panic = "abort"
 
 [dependencies]
+uefi_macros = { path = "uefi_macros" }
