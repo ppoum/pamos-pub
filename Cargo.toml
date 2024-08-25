@@ -3,4 +3,23 @@ name = "pamos-pub"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "pub"
+path = "src/main.rs"
+test = false
+doctest = false
+bench = false
+
+[lib]
+path = "src/uefi/lib.rs"
+
+[profile.dev]
+panic = "abort"
+
+[profile.release]
+panic = "abort"
+
+[profile.test]
+panic = "abort"
+
 [dependencies]
