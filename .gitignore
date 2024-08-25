@@ -1,3 +1,4 @@
 /target
 uefi_macros/target
 uefi.img
+BOOTX64.EFI

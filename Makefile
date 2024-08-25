@@ -9,10 +9,12 @@ DEBUG_BIN_PATH=target/x86_64-unknown-uefi/debug/pub.efi
 
 $(RELEASE_BIN_PATH): $(RUST_SRC)
 	cargo b --release
+BOOTX64.EFI: $(RELEASE_BIN_PATH)
+	cp $< $@
 
 img: uefi.img
 
-uefi.img: $(RELEASE_BIN_PATH)
+uefi.img: BOOTX64.EFI
 	dd if=/dev/zero of=$@ bs=1k count=1440
 	mformat -i $@ -f 1440 ::
 	mmd -i $@ ::/EFI
@@ -20,7 +22,7 @@ uefi.img: $(RELEASE_BIN_PATH)
 	mcopy -i $@ $< ::/EFI/BOOT
 
 qemu: uefi.img
-	qemu-system-x86_64 -drive \
+	qemu-system-x86_64 -enable-kvm -drive \
 		if=pflash,format=raw,readonly=on,file=$(OVMF_PATH)/OVMF_CODE.fd \
 		-drive \
 		if=pflash,format=raw,readonly=on,file=$(OVMF_PATH)/OVMF_VARS.fd \
