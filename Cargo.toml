@@ -20,8 +20,5 @@ panic = "abort"
 [profile.release]
 panic = "abort"
 
-[profile.test]
-panic = "abort"
-
 [dependencies]
 uefi_macros = { path = "uefi_macros" }
