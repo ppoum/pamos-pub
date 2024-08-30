@@ -18,5 +18,5 @@ pub fn cstr16(input: TokenStream) -> TokenStream {
         .collect();
     chars.push(0); // NULL terminator
 
-    quote!(unsafe { ::uefi::CStr16::from_u16_unsafe(&[#(#chars),*]) }).into()
+    quote!(unsafe { ::lib::uefi::CStr16::from_u16_unsafe(&[#(#chars),*]) }).into()
 }

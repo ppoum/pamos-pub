@@ -1,7 +1,7 @@
 #![no_std]
 #![no_main]
 
-use uefi::{Handle, Status, SystemTable};
+use lib::uefi::{Handle, Status, SystemTable};
 use uefi_macros::cstr16;
 
 #[panic_handler]

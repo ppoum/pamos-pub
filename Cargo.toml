@@ -11,8 +11,8 @@ doctest = false
 bench = false
 
 [lib]
-name = "uefi"
-path = "src/uefi/lib.rs"
+name = "lib"
+path = "src/lib/lib.rs"
 
 [profile.dev]
 panic = "abort"

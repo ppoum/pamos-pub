@@ -1,4 +1,4 @@
-use crate::Status;
+use super::Status;
 
 #[repr(C)]
 pub(crate) struct RawSimpleTextOutputProtocol {

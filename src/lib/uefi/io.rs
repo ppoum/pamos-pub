@@ -1,4 +1,4 @@
-use crate::{protocol::RawSimpleTextOutputProtocol, CStr16, Status};
+use super::{protocol::RawSimpleTextOutputProtocol, CStr16, Status};
 
 #[repr(transparent)]
 pub struct Output(RawSimpleTextOutputProtocol);
