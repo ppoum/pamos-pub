@@ -25,6 +25,16 @@ impl CStr16 {
     }
 }
 
+
+#[repr(transparent)]
+pub struct Uuid([u8; 16]);
+
+impl Uuid {
+    pub const fn from_bytes(bytes: [u8; 16]) -> Self {
+        Self(bytes)
+    }
+}
+
 #[repr(transparent)]
 pub struct Handle(NonNull<c_void>);
 
