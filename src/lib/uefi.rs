@@ -1,12 +1,11 @@
 mod boot_services;
-pub mod io;
-pub mod protocol;
+pub mod protocols;
 pub mod status;
 
 use core::{ffi::c_void, ptr::NonNull, slice};
 
 use boot_services::{BootServices, RawBootServices};
-use io::Output;
+use protocols::Output;
 
 #[repr(transparent)]
 pub struct CStr16([u16]);
