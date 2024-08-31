@@ -12,7 +12,7 @@ impl SimpleTextOutputProtocol {
 }
 
 #[repr(C)]
-pub(crate) struct RawSimpleTextOutputProtocol {
+pub struct RawSimpleTextOutputProtocol {
     pub reset: unsafe extern "efiapi" fn(this: *mut Self, extended_verification: bool) -> Status,
     pub output_string: unsafe extern "efiapi" fn(this: *mut Self, string: *const u16) -> Status,
     pub test_string: unsafe extern "efiapi" fn(this: *mut Self, string: *const u16) -> Status,

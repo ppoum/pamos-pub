@@ -21,7 +21,7 @@ impl LoadedImageProtocol {
 }
 
 #[repr(C)]
-pub struct RawEfiLoadedImageProtocol {
+struct RawEfiLoadedImageProtocol {
     pub revision: u32,
     pub parent_handle: Handle,
     pub system_table: *const RawSystemTable,

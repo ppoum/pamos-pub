@@ -20,8 +20,8 @@ impl BootServices {
         handle: Handle,
         protocol: &Guid,
     ) -> EfiResult<Option<*const c_void>> {
-        let mut interface: *mut c_void = ptr::null_mut();
-        let interface_ptr: *mut *mut c_void = &mut interface;
+        let mut interface: *const c_void = ptr::null();
+        let interface_ptr: *mut *const c_void = &mut interface;
         // // Safety: Handled on the EFI side, our data structures aren't null
         let result =
             unsafe { ((*self.0).handle_protocol)(handle, protocol, interface_ptr) }.to_result();
@@ -63,7 +63,7 @@ pub(crate) struct RawBootServices {
     handle_protocol: unsafe extern "efiapi" fn(
         handle: Handle,
         protocol: *const Guid,
-        interface: *mut *mut c_void,
+        interface: *mut *const c_void,
     ) -> Status,
     _reserved: *const c_void,
     register_protocol_notify: *const c_void,
