@@ -1,8 +1,10 @@
 mod console;
 mod loaded_image;
+mod media;
 
 pub use console::*;
 pub use loaded_image::*;
+pub use media::*;
 
 use super::{boot_services::BootServices, status::StatusError, Guid, Handle};
 
