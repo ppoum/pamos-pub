@@ -4,10 +4,10 @@ use uefi_macros::Protocol;
 
 use crate::{
     guid,
-    uefi::{boot_services::BootServices, status::Status, Guid, Handle, MemoryType, RawSystemTable},
+    uefi::{status::Status, Guid, Handle, MemoryType, RawSystemTable},
 };
 
-use super::{ProtocolLocateError, RawProtocol};
+use super::RawProtocol;
 
 #[repr(transparent)]
 #[derive(Protocol)]
