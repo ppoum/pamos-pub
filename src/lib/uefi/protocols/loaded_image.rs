@@ -1,5 +1,7 @@
 use core::ffi::c_void;
 
+use uefi_macros::Protocol;
+
 use crate::{
     guid,
     uefi::{boot_services::BootServices, status::Status, Guid, Handle, MemoryType, RawSystemTable},
@@ -8,17 +10,8 @@ use crate::{
 use super::{ProtocolLocateError, RawProtocol};
 
 #[repr(transparent)]
+#[derive(Protocol)]
 pub struct LoadedImageProtocol(RawEfiLoadedImageProtocol);
-
-impl LoadedImageProtocol {
-    pub fn try_locate(
-        handle: Handle,
-        boot_services: &BootServices,
-    ) -> Result<&Self, ProtocolLocateError> {
-        let raw = RawEfiLoadedImageProtocol::try_locate_protocol(boot_services, handle)?;
-        unsafe { Ok(&*(raw as *const Self)) }
-    }
-}
 
 #[repr(C)]
 struct RawEfiLoadedImageProtocol {

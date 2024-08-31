@@ -4,7 +4,7 @@
 use lib::{
     cstr16,
     uefi::{
-        protocols::{LoadedImageProtocol, ProtocolLocateError},
+        protocols::{LoadedImageProtocol, Protocol, ProtocolLocateError},
         status::Status,
         Handle, SystemTable,
     },

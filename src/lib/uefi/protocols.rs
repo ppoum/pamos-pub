@@ -28,3 +28,10 @@ pub trait RawProtocol: Sized {
         Ok(void_interface as *const Self)
     }
 }
+
+pub trait Protocol {
+    fn try_locate(
+        handle: Handle,
+        boot_services: &BootServices,
+    ) -> Result<&Self, ProtocolLocateError>;
+}

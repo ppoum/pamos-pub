@@ -1,6 +1,42 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{parse_macro_input, LitStr};
+use syn::{parse_macro_input, Data, DeriveInput, Fields, LitStr};
+
+#[proc_macro_derive(Protocol)]
+pub fn protocol_derive(input: TokenStream) -> TokenStream {
+    let input = parse_macro_input!(input as DeriveInput);
+    let ident = input.ident;
+    let data = input.data;
+    let data = match data {
+        Data::Struct(d) => d,
+        _ => panic!("Protocol can only be derived for structs"),
+    };
+
+    let fields = match data.fields {
+        Fields::Unnamed(f) => f.unnamed,
+        _ => panic!("Protocol can only be derived on tuple structs."),
+    };
+
+    if fields.len() != 1 {
+        panic!("Expected one field, found {} instead", fields.len());
+    }
+
+    let field_type = &fields.first().unwrap().ty;
+
+    quote! {
+        impl crate::uefi::protocols::Protocol for #ident {
+            fn try_locate(
+                handle: Handle,
+                boot_services: &BootServices
+            ) -> Result<&Self, ProtocolLocateError> {
+                let raw = #field_type::try_locate_protocol(boot_services, handle)?;
+                unsafe { Ok(&*(raw as *const Self)) }
+            }
+        }
+
+    }
+    .into()
+}
 
 #[proc_macro]
 pub fn ucs2_slice(input: TokenStream) -> TokenStream {
