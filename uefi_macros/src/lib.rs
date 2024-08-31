@@ -22,18 +22,18 @@ pub fn cstr16(input: TokenStream) -> TokenStream {
 }
 
 #[proc_macro]
-pub fn uuid(input: TokenStream) -> TokenStream {
+pub fn guid(input: TokenStream) -> TokenStream {
     let str_input = parse_macro_input!(input as LitStr);
     let str = str_input.value();
 
-    match try_uuid_str_to_bytes(&str) {
-        Ok(b) => quote!(::lib::uefi::Uuid::from_bytes([#(#b),*])).into(),
+    match try_guid_str_to_bytes(&str) {
+        Ok(b) => quote!(::lib::uefi::Guid::from_bytes([#(#b),*])).into(),
         Err(e) => {
             let reason = match e {
-                BadUuidString::BadFormat => {
+                BadGuidString::BadFormat => {
                     "Wrong string format, expected hex string: aabbccdd-eeff-gghh-iijj-kkllmmnnoopp"
                 }
-                BadUuidString::InvalidCharacter => "Invalid character, expecting A-Fa-f0-9",
+                BadGuidString::InvalidCharacter => "Invalid character, expecting A-Fa-f0-9",
             };
 
             syn::Error::new(str_input.span(), reason)
@@ -43,7 +43,7 @@ pub fn uuid(input: TokenStream) -> TokenStream {
     }
 }
 
-enum BadUuidString {
+enum BadGuidString {
     BadFormat,
     InvalidCharacter,
 }
@@ -51,12 +51,12 @@ enum BadUuidString {
 /// String:  aabbccdd-eeff-gghh-iijj-kkllmmnnoopp
 /// Becomes: ddccbbaaffeehhggiijjkkllmmnnoopp
 /// Block #1: LE, #2: LE, #3: LE, #4: BE, #5: BE
-fn try_uuid_str_to_bytes(str: &str) -> Result<[u8; 16], BadUuidString> {
+fn try_guid_str_to_bytes(str: &str) -> Result<[u8; 16], BadGuidString> {
     // Check string format
     let blocks: Vec<&str> = str.split('-').collect();
 
     if blocks.len() != 5 {
-        return Err(BadUuidString::BadFormat);
+        return Err(BadGuidString::BadFormat);
     }
 
     if blocks[0].len() != 8
@@ -65,20 +65,20 @@ fn try_uuid_str_to_bytes(str: &str) -> Result<[u8; 16], BadUuidString> {
         || blocks[3].len() != 4
         || blocks[4].len() != 12
     {
-        return Err(BadUuidString::BadFormat);
+        return Err(BadGuidString::BadFormat);
     }
 
     let mut bytes = [0; 16];
 
-    let x = hex_str_to_bytes(blocks[0], true).ok_or(BadUuidString::InvalidCharacter)?;
+    let x = hex_str_to_bytes(blocks[0], true).ok_or(BadGuidString::InvalidCharacter)?;
     bytes[..4].copy_from_slice(x.as_slice());
-    let x = hex_str_to_bytes(blocks[1], true).ok_or(BadUuidString::InvalidCharacter)?;
+    let x = hex_str_to_bytes(blocks[1], true).ok_or(BadGuidString::InvalidCharacter)?;
     bytes[4..6].copy_from_slice(x.as_slice());
-    let x = hex_str_to_bytes(blocks[2], true).ok_or(BadUuidString::InvalidCharacter)?;
+    let x = hex_str_to_bytes(blocks[2], true).ok_or(BadGuidString::InvalidCharacter)?;
     bytes[6..8].copy_from_slice(x.as_slice());
-    let x = hex_str_to_bytes(blocks[3], false).ok_or(BadUuidString::InvalidCharacter)?;
+    let x = hex_str_to_bytes(blocks[3], false).ok_or(BadGuidString::InvalidCharacter)?;
     bytes[8..10].copy_from_slice(x.as_slice());
-    let x = hex_str_to_bytes(blocks[4], false).ok_or(BadUuidString::InvalidCharacter)?;
+    let x = hex_str_to_bytes(blocks[4], false).ok_or(BadGuidString::InvalidCharacter)?;
     bytes[10..].copy_from_slice(x.as_slice());
 
     Ok(bytes)

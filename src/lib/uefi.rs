@@ -27,9 +27,9 @@ impl CStr16 {
 
 
 #[repr(transparent)]
-pub struct Uuid([u8; 16]);
+pub struct Guid([u8; 16]);
 
-impl Uuid {
+impl Guid {
     pub const fn from_bytes(bytes: [u8; 16]) -> Self {
         Self(bytes)
     }
