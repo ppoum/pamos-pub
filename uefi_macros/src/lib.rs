@@ -3,7 +3,7 @@ use quote::quote;
 use syn::{parse_macro_input, LitStr};
 
 #[proc_macro]
-pub fn cstr16(input: TokenStream) -> TokenStream {
+pub fn ucs2_slice(input: TokenStream) -> TokenStream {
     let str = parse_macro_input!(input as LitStr).value();
 
     // Convert string to utf16 array
@@ -18,16 +18,16 @@ pub fn cstr16(input: TokenStream) -> TokenStream {
         .collect();
     chars.push(0); // NULL terminator
 
-    quote!(unsafe { ::lib::uefi::CStr16::from_u16_unsafe(&[#(#chars),*]) }).into()
+    quote!([#(#chars),*]).into()
 }
 
 #[proc_macro]
-pub fn guid(input: TokenStream) -> TokenStream {
+pub fn guid_str_to_bytes(input: TokenStream) -> TokenStream {
     let str_input = parse_macro_input!(input as LitStr);
     let str = str_input.value();
 
     match try_guid_str_to_bytes(&str) {
-        Ok(b) => quote!(::lib::uefi::Guid::from_bytes([#(#b),*])).into(),
+        Ok(b) => quote!([#(#b),*]).into(),
         Err(e) => {
             let reason = match e {
                 BadGuidString::BadFormat => {

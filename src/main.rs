@@ -1,8 +1,10 @@
 #![no_std]
 #![no_main]
 
-use lib::uefi::{Handle, Status, SystemTable};
-use uefi_macros::cstr16;
+use lib::{
+    cstr16,
+    uefi::{Handle, Status, SystemTable},
+};
 
 #[panic_handler]
 fn _panic_handler(_: &core::panic::PanicInfo) -> ! {

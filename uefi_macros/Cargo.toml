@@ -9,4 +9,3 @@ proc-macro = true
 [dependencies]
 quote = "*"
 syn = "*"
-proc-macro2 = "*"
