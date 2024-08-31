@@ -8,15 +8,15 @@ use crate::{
 use super::{ProtocolLocateError, RawProtocol};
 
 #[repr(transparent)]
-pub struct LoadedImageProtocol(*const RawEfiLoadedImageProtocol);
+pub struct LoadedImageProtocol(RawEfiLoadedImageProtocol);
 
 impl LoadedImageProtocol {
     pub fn try_locate(
         handle: Handle,
         boot_services: &BootServices,
-    ) -> Result<Self, ProtocolLocateError> {
+    ) -> Result<&Self, ProtocolLocateError> {
         let raw = RawEfiLoadedImageProtocol::try_locate_protocol(boot_services, handle)?;
-        Ok(Self(raw))
+        unsafe { Ok(&*(raw as *const Self)) }
     }
 }
 
