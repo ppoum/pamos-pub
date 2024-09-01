@@ -3,7 +3,10 @@ use core::fmt::Display;
 use lib::{
     elf::{Elf64Ehdr, ElfClass, ElfDataLayout, ElfMachine, ElfType},
     println,
-    uefi::{protocols::FileProtocol, status::StatusError},
+    uefi::{
+        protocols::FileProtocol,
+        status::{EfiResult, StatusError},
+    },
 };
 
 #[derive(Debug)]
@@ -40,6 +43,12 @@ impl Display for KernelHeaderValidationError {
     }
 }
 
+impl From<StatusError> for KernelHeaderValidationError {
+    fn from(value: StatusError) -> Self {
+        Self::EfiError(value)
+    }
+}
+
 pub struct KernelFile<'a>(&'a FileProtocol);
 
 impl<'a> KernelFile<'a> {
@@ -49,14 +58,8 @@ impl<'a> KernelFile<'a> {
 
     pub fn validate_header(&self) -> Result<(), KernelHeaderValidationError> {
         // Read the ELF header
-        let mut header: Elf64Ehdr = Default::default();
-        match self.0.read(&mut header) {
-            Ok(true) => println!("Read the ELF header in full"),
-            Ok(false) => println!("WARN: Partially read the elf header"),
-            Err(e) => {
-                return Err(KernelHeaderValidationError::EfiError(e));
-            }
-        };
+        self.0.set_position(0)?;
+        let header = self.elf_header()?;
 
         if !header.valid_magic() {
             return Err(KernelHeaderValidationError::InvalidMagic);
@@ -79,5 +82,14 @@ impl<'a> KernelFile<'a> {
         }
 
         Ok(())
+    }
+
+    pub fn elf_header(&self) -> EfiResult<Elf64Ehdr> {
+        self.0.set_position(0)?;
+        let mut header: Elf64Ehdr = Default::default();
+        match self.0.read(&mut header)? {
+            true => Ok(header),
+            false => Err(StatusError::LoadError),
+        }
     }
 }

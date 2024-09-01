@@ -129,6 +129,11 @@ impl FileProtocol {
 
         Ok(t_size == buf_size)
     }
+
+    pub fn set_position(&self, position: u64) -> EfiResult<()> {
+        // Safety: Assumes self is a valid reference
+        unsafe { (self.0.set_position)(self as *const _ as *mut _, position) }.to_result()
+    }
 }
 
 #[repr(C)]
@@ -150,7 +155,7 @@ struct RawFileProtocol {
     ) -> Status,
     write: *const c_void,
     get_position: *const c_void,
-    set_position: *const c_void,
+    set_position: unsafe extern "efiapi" fn(this: *mut Self, position: u64) -> Status,
     flush: *const c_void,
     open_ex: *const c_void,
     read_ex: *const c_void,
