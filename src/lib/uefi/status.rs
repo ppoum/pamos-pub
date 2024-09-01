@@ -13,7 +13,7 @@ impl Status {
         if self.0 & UPPER_BIT_MASK == 0 {
             Ok(())
         } else {
-            todo!()
+            Err(self.0.into())
         }
     }
 }
