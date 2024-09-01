@@ -2,12 +2,14 @@
 #![no_main]
 
 use lib::{
-    cstr16, println,
+    cstr16,
+    elf::{Elf64Ehdr, ElfClass, ElfDataLayout, ElfMachine, ElfType},
+    println,
     uefi::{
         helper,
         protocols::{
-            FileAttribute, FileMode, LoadedImageProtocol, Protocol, ProtocolLocateError,
-            SimpleFileSystemProtocol,
+            FileAttribute, FileMode, FileProtocol, LoadedImageProtocol, Protocol,
+            ProtocolLocateError, SimpleFileSystemProtocol,
         },
         status::Status,
         Handle, SystemTable,
@@ -22,6 +24,46 @@ fn unwrap_protocol_result<T>(res: Result<T, ProtocolLocateError>) -> T {
         Err(ProtocolLocateError::Error(_)) => println!("Other error"),
     };
     panic!()
+}
+
+fn validate_kernel_elf(file: &FileProtocol) -> bool {
+    // Read the ELF header
+    let mut header: Elf64Ehdr = Default::default();
+    match file.read(&mut header) {
+        Ok(true) => println!("Read the ELF header in full"),
+        Ok(false) => println!("WARN: Partially read the elf header"),
+        Err(e) => {
+            println!("ERR: error reading kernel binary: {:?}", e);
+            return false;
+        }
+    };
+
+    if !header.valid_magic() {
+        println!("ERR: invalid ELF magic");
+        return false;
+    }
+
+    if header.class() != ElfClass::Class64 {
+        println!("ERR: kernel is not 64-bit");
+        return false;
+    }
+
+    if header.data_layout() != ElfDataLayout::Lsb {
+        println!("ERR: kernel doesn't use LSB data ordering");
+        return false;
+    }
+
+    if header.elf_type() != ElfType::Executable && header.elf_type() != ElfType::Dynamic {
+        println!("ERR: kernel ELF file isn't an executable file (ET_EXEC or ET_DYN)");
+        return false;
+    }
+
+    if header.machine() != ElfMachine::X86_64 {
+        println!("ERR: kernel is not a x86_64 binary");
+        return false;
+    }
+
+    true
 }
 
 #[no_mangle]
@@ -47,6 +89,12 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTa
             FileAttribute::default(),
         )
         .expect("Error opening kernel.bin file");
+    println!("Opened the kernel.bin file");
 
-    1.into()
+    if !validate_kernel_elf(kernel_file) {
+        panic!("Kernel validation failed");
+    }
+    println!("Kernel file validated");
+
+    loop {}
 }

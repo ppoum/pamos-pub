@@ -109,6 +109,26 @@ impl FileProtocol {
         // Safety: If call succeeds (checked above), then should be a valid pointer
         unsafe { Ok(&*(new_handle as *const _)) }
     }
+
+    /// Reads a file into an object. Returns `Ok(true)` if it filled the buffer, `Ok(false)` if the
+    /// buffer wasn't filled, and `Err` if there was an error.
+    pub fn read<T: Sized>(&self, buf: &mut T) -> EfiResult<bool> {
+        let t_size = size_of::<T>();
+        let mut buf_size = t_size;
+
+        // Safety: Assuming the self and buf references are valid, no safety restrictions can be
+        // violated during this function call.
+        unsafe {
+            (self.0.read)(
+                self as *const _ as *mut _,
+                &mut buf_size as *mut _,
+                buf as *mut T as _,
+            )
+        }
+        .to_result()?;
+
+        Ok(t_size == buf_size)
+    }
 }
 
 #[repr(C)]

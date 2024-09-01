@@ -8,24 +8,25 @@ mod definitions;
 pub use definitions::types::*;
 
 #[repr(C)]
+#[derive(Default)]
 pub struct Elf64Ehdr {
-    pub e_ident: [u8; EI_NIDENT],
-    pub e_type: Elf64Half,
-    pub e_machine: Elf64Half,
-    pub e_version: Elf64Half,
+    e_ident: [u8; EI_NIDENT],
+    e_type: Elf64Half,
+    e_machine: Elf64Half,
+    e_version: Elf64Half,
     /// Entry point virtual address
-    pub e_entry: Elf64Addr,
+    e_entry: Elf64Addr,
     /// Program header table file offset
-    pub e_phoff: Elf64Off,
+    e_phoff: Elf64Off,
     /// Section header table file offset
-    pub e_shoff: Elf64Off,
-    pub e_flags: Elf64Word,
-    pub e_ehsize: Elf64Half,
-    pub e_phentsize: Elf64Half,
-    pub e_phnum: Elf64Half,
-    pub e_shentsize: Elf64Half,
-    pub e_shnum: Elf64Half,
-    pub e_shstrndx: Elf64Half,
+    e_shoff: Elf64Off,
+    e_flags: Elf64Word,
+    e_ehsize: Elf64Half,
+    e_phentsize: Elf64Half,
+    e_phnum: Elf64Half,
+    e_shentsize: Elf64Half,
+    e_shnum: Elf64Half,
+    e_shstrndx: Elf64Half,
 }
 
 impl Elf64Ehdr {
@@ -47,6 +48,10 @@ impl Elf64Ehdr {
 
     pub fn version(&self) -> ElfVersion {
         self.e_version.into()
+    }
+
+    pub fn machine(&self) -> ElfMachine {
+        self.e_machine.into()
     }
 }
 
