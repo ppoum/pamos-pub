@@ -49,7 +49,7 @@ pub fn _st_is_set() -> bool {
 
 pub fn _print(args: fmt::Arguments, stdout: &mut Output, newline: bool) {
     if newline {
-        stdout.write_fmt(format_args!("{}\n", args))
+        stdout.write_fmt(format_args!("{}\r\n", args))
     } else {
         stdout.write_fmt(args)
     }
