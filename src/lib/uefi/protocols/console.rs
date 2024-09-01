@@ -1,4 +1,4 @@
-use crate::uefi::{status::Status, CStr16};
+use crate::uefi::{status::Status, string::CStr16};
 
 pub type Output = SimpleTextOutputProtocol;
 

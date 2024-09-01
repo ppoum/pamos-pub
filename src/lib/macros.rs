@@ -8,7 +8,7 @@ macro_rules! cstr16 {
     ($s:literal) => {{
         const SLICE: &[u16] = &uefi_macros::ucs2_slice!($s);
         // Safety: ucs2_slice macro always creates a valid UCS2 string slice
-        unsafe { $crate::uefi::CStr16::from_u16_unsafe(SLICE) }
+        unsafe { $crate::uefi::string::CStr16::from_u16_unsafe(SLICE) }
     }};
 }
 
