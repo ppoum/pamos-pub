@@ -2,7 +2,6 @@ use core::fmt::Display;
 
 use lib::{
     elf::{Elf64Ehdr, ElfClass, ElfDataLayout, ElfMachine, ElfType},
-    println,
     uefi::{
         protocols::FileProtocol,
         status::{EfiResult, StatusError},

@@ -1,4 +1,5 @@
 use core::{
+    ffi::c_void,
     fmt::{self, Write},
     ptr,
     sync::atomic::{AtomicPtr, Ordering},
@@ -6,7 +7,7 @@ use core::{
 
 use crate::println;
 
-use super::{protocols::Output, SystemTable};
+use super::{boot_services::BootServices, protocols::Output, status::EfiResult, SystemTable};
 
 pub static _ST: AtomicPtr<SystemTable> = AtomicPtr::new(ptr::null_mut());
 
@@ -54,4 +55,91 @@ pub fn _print(args: fmt::Arguments, stdout: &mut Output, newline: bool) {
         stdout.write_fmt(args)
     }
     .expect("error writing to output")
+}
+
+/// A wrapper around an allocated pool pointer. Frees the pool once the object goes out of scope.
+/// # Safety
+/// It is assumed that the pool is valid as long as this object exists. The data should be
+/// initialized when the `AllocatedPool` object is created.
+pub struct AllocatedPool<T: ?Sized> {
+    _marker: core::marker::PhantomData<T>,
+    boot_services: BootServices,
+    ptr: *mut c_void,
+    slice_size: Option<usize>,
+}
+
+impl<T> AllocatedPool<T> {
+    pub fn try_new(boot_services: BootServices) -> EfiResult<Self> {
+        let len = size_of::<T>();
+        let ptr = boot_services.allocate_pool(len)?;
+
+        Ok(Self {
+            _marker: core::marker::PhantomData,
+            boot_services,
+            ptr,
+            slice_size: None,
+        })
+    }
+}
+
+impl<T> AsRef<T> for AllocatedPool<T> {
+    fn as_ref(&self) -> &T {
+        unsafe { &*(self.ptr as *const T) }
+    }
+}
+
+impl<T> AsMut<T> for AllocatedPool<T> {
+    fn as_mut(&mut self) -> &mut T {
+        unsafe { &mut *(self.ptr as *mut T) }
+    }
+}
+
+impl<T> AllocatedPool<[T]> {
+    pub fn try_new(boot_services: BootServices, len: usize) -> EfiResult<Self> {
+        let i = size_of::<T>();
+        let ptr = boot_services.allocate_pool(i * len)?;
+
+        Ok(Self {
+            _marker: core::marker::PhantomData,
+            boot_services,
+            ptr,
+            slice_size: Some(len),
+        })
+    }
+}
+
+impl<T> AsRef<[T]> for AllocatedPool<[T]> {
+    fn as_ref(&self) -> &[T] {
+        // Safety: The size of the slice is known, we expect it to have been initialized with
+        // proper `T` data.
+        unsafe {
+            core::slice::from_raw_parts(
+                self.ptr as *const T,
+                self.slice_size.expect(
+                    "AllocatedPool containing a slice did not have a length specified (weird)",
+                ),
+            )
+        }
+    }
+}
+
+impl<T> AsMut<[T]> for AllocatedPool<[T]> {
+    fn as_mut(&mut self) -> &mut [T] {
+        // Safety: The size of the slice is known, we expect it to have been initialized with
+        // proper `T` data.
+        unsafe {
+            core::slice::from_raw_parts_mut(
+                self.ptr as *mut T,
+                self.slice_size.expect(
+                    "AllocatedPool containing a slice did not have a length specified (weird)",
+                ),
+            )
+        }
+    }
+}
+
+impl<T: ?Sized> Drop for AllocatedPool<T> {
+    fn drop(&mut self) {
+        let _ = self.boot_services.free_pool(self.ptr);
+    }
 }

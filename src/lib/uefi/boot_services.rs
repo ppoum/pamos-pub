@@ -33,6 +33,8 @@ impl BootServices {
         }
     }
 
+    /// Returns `Ok(ptr)` if the call succeeded, where `ptr` points to the start of the pool.
+    /// Returns `Err` otherwise.
     pub(crate) fn allocate_pool(&self, size: usize) -> EfiResult<*mut c_void> {
         self.allocate_pool_with_mem_type(MemoryType::EfiLoaderData, size)
     }
@@ -50,7 +52,7 @@ impl BootServices {
         Ok(buf)
     }
 
-    pub(crate) fn free_pool<T>(&self, buf: *mut T) -> EfiResult<()> {
+    pub(crate) fn free_pool<T: ?Sized>(&self, buf: *mut T) -> EfiResult<()> {
         // Safety: If the buffer reference doesn't point to an allocated pool, the function returns
         // an error status, so no unwanted action can be taken.
         unsafe { ((*self.0).free_pool)(buf as *mut c_void) }.to_result()
