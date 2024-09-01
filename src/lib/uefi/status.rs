@@ -24,6 +24,7 @@ impl From<usize> for Status {
     }
 }
 
+#[derive(Debug)]
 pub enum StatusError {
     LoadError = 1,
     InvalidParameter,
