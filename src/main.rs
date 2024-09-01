@@ -2,11 +2,10 @@
 #![no_main]
 
 use lib::{
-    cstr16, println,
     println,
     uefi::{
         helper,
-        protocols::{LoadedImageProtocol, Protocol, ProtocolLocateError},
+        protocols::{LoadedImageProtocol, Protocol, ProtocolLocateError, SimpleFileSystemProtocol},
         status::Status,
         Handle, SystemTable,
     },
@@ -29,6 +28,16 @@ fn _panic_handler(panic_info: &core::panic::PanicInfo) -> ! {
     loop {}
 }
 
+// Helper function for now
+fn unwrap_protocol_result<T>(res: Result<T, ProtocolLocateError>) -> T {
+    match res {
+        Ok(p) => return p,
+        Err(ProtocolLocateError::Unsupported) => println!("Unsupported protocol"),
+        Err(ProtocolLocateError::Error(_)) => println!("Other error"),
+    };
+    panic!()
+}
+
 #[no_mangle]
 pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTable) -> Status {
     helper::register_services(&system_table);
@@ -37,12 +46,12 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTa
     println!("Hello, World!");
 
     let res = LoadedImageProtocol::try_locate(image_handle, &boot_services);
-    let s = match res {
-        Ok(_) => cstr16!("No error"),
-        Err(ProtocolLocateError::Unsupported) => cstr16!("Unsupported protocol"),
-        Err(ProtocolLocateError::Error(_)) => cstr16!("Other error"),
-    };
-    system_table.stdout().write(s);
+    let loaded_image = unwrap_protocol_result(res);
 
-    panic!("loop")
+    // Get volume from our EFI app handle and open root path
+    let res = SimpleFileSystemProtocol::try_locate(loaded_image.device(), &boot_services);
+    let res = unwrap_protocol_result(res);
+    let root = res.open_volume().expect("error opening root volume");
+
+    1.into()
 }

@@ -13,6 +13,12 @@ use super::RawProtocol;
 #[derive(Protocol)]
 pub struct LoadedImageProtocol(RawEfiLoadedImageProtocol);
 
+impl LoadedImageProtocol {
+    pub fn device(&self) -> Handle {
+        self.0.device_handle
+    }
+}
+
 #[repr(C)]
 struct RawEfiLoadedImageProtocol {
     pub revision: u32,
