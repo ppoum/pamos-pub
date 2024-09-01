@@ -2,8 +2,9 @@
 #![no_main]
 
 use lib::{
-    cstr16,
+    cstr16, println,
     uefi::{
+        helper,
         protocols::{LoadedImageProtocol, Protocol, ProtocolLocateError},
         status::Status,
         Handle, SystemTable,
@@ -17,10 +18,10 @@ fn _panic_handler(_: &core::panic::PanicInfo) -> ! {
 
 #[no_mangle]
 pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTable) -> Status {
+    helper::register_services(&system_table);
     let boot_services = system_table.boot_services();
 
-    let s = cstr16!("Hello, World!\n");
-    system_table.stdout().write(s);
+    println!("Hello, World!");
 
     let res = LoadedImageProtocol::try_locate(image_handle, &boot_services);
     let s = match res {

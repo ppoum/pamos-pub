@@ -1,4 +1,5 @@
 mod boot_services;
+pub mod helper;
 pub mod protocols;
 pub mod status;
 pub mod string;

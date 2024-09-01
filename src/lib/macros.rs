@@ -19,3 +19,25 @@ macro_rules! guid {
         $crate::uefi::Guid::from_bytes(ARRAY)
     }};
 }
+
+#[macro_export]
+macro_rules! print {
+    ($s:literal) => {
+        unsafe {
+            $crate::uefi::helper::_get_st_panicking()
+                .stdout()
+                .write($crate::cstr16!($s));
+        }
+    };
+}
+
+#[macro_export]
+macro_rules! println {
+    () => {
+        $crate::print!("\n")
+    };
+    ($s:expr) => {{
+        let stdout = unsafe { $crate::uefi::helper::_get_st_panicking().stdout() };
+        $crate::uefi::helper::_print(core::format_args!("{}{}", $s, "\n"), stdout);
+    }};
+}
