@@ -13,6 +13,8 @@ bench = false
 [lib]
 name = "lib"
 path = "src/lib/lib.rs"
+test = false
+bench = false
 
 [profile.dev]
 panic = "abort"

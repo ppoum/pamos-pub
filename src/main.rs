@@ -11,23 +11,6 @@ use lib::{
     },
 };
 
-#[panic_handler]
-fn _panic_handler(panic_info: &core::panic::PanicInfo) -> ! {
-    // NOTE: PanicInfo#payload isn't created in core, since it requires allocation.
-    //
-    if helper::_st_is_set() {
-        println!("panic occurred: {:?}", panic_info);
-        // FIXME: PanicInfo#message is getting stabilized in 1.81
-
-        // if let Some(msg) = panic_info.message() {
-        //     println!("panic occurred: {}", msg);
-        // } else {
-        //     println!("panic occurred");
-        // }
-    }
-    loop {}
-}
-
 // Helper function for now
 fn unwrap_protocol_result<T>(res: Result<T, ProtocolLocateError>) -> T {
     match res {
