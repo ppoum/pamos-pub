@@ -1,6 +1,9 @@
 use core::fmt::{self, Write};
 
-use crate::uefi::{status::Status, string::CStr16};
+use crate::uefi::{
+    status::{EfiResult, Status},
+    string::CStr16,
+};
 
 pub type Output = SimpleTextOutputProtocol;
 
@@ -8,8 +11,8 @@ pub type Output = SimpleTextOutputProtocol;
 pub struct SimpleTextOutputProtocol(RawSimpleTextOutputProtocol);
 
 impl SimpleTextOutputProtocol {
-    pub fn write(&mut self, s: &CStr16) -> Status {
-        unsafe { (self.0.output_string)(&mut self.0, s.as_ptr()) }
+    pub fn write(&mut self, s: &CStr16) -> EfiResult<()> {
+        unsafe { (self.0.output_string)(&mut self.0, s.as_ptr()) }.to_result()
     }
 }
 
@@ -27,7 +30,7 @@ impl Write for SimpleTextOutputProtocol {
                 // Safety: Buffer only contains UCS-2 characters and always
                 //         ends with a null byte
                 let str = unsafe { CStr16::from_u16_unsafe(&buffer) };
-                self.write(str);
+                self.write(str).map_err(|_| fmt::Error)?;
                 buffer = [0_u16; BUF_SIZE];
                 i = 0;
             }
@@ -36,8 +39,6 @@ impl Write for SimpleTextOutputProtocol {
             let byte = if bytes.len() == 1 {
                 bytes[0]
             } else {
-                // NOTE: This is a bit weird, we could be returning an error mid-print
-                // Might want to change the behaviour? Pre-parse the whole string? Too expensive?
                 return Err(fmt::Error);
             };
 
@@ -49,7 +50,7 @@ impl Write for SimpleTextOutputProtocol {
         // Safety: Buffer only contains UCS-2 characters and always
         //         ends with a null byte
         let str = unsafe { CStr16::from_u16_unsafe(&buffer) };
-        self.write(str);
+        self.write(str).map_err(|_| fmt::Error)?;
         Ok(())
     }
 }
