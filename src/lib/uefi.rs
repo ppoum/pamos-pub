@@ -70,7 +70,8 @@ impl Guid {
 }
 
 #[repr(transparent)]
-pub struct Handle(NonNull<c_void>);
+#[derive(Clone, Copy)]
+pub struct Handle(NonNull<*mut c_void>);
 
 #[repr(transparent)]
 pub struct SystemTable(*const RawSystemTable);
