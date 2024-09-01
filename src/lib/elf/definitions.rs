@@ -111,6 +111,8 @@ const EM_FRV: Elf64Half = 0x5441; // Fujitsu FR-V
 
 pub mod types {
     use super::*;
+
+    #[derive(PartialEq, Eq)]
     pub enum ElfMachine {
         Unknown,
         M32,
@@ -207,6 +209,7 @@ pub mod types {
         }
     }
 
+    #[derive(PartialEq, Eq)]
     pub enum ElfClass {
         Class32,
         Class64,
@@ -223,6 +226,7 @@ pub mod types {
         }
     }
 
+    #[derive(PartialEq, Eq)]
     pub enum ElfDataLayout {
         Lsb,
         Msb,
@@ -239,6 +243,7 @@ pub mod types {
         }
     }
 
+    #[derive(PartialEq, Eq)]
     pub enum ElfType {
         Unknown,
         Relocatable,
@@ -259,6 +264,7 @@ pub mod types {
         }
     }
 
+    #[derive(PartialEq, Eq)]
     pub enum ElfVersion {
         Unknown,
         Current,
