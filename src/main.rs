@@ -2,10 +2,13 @@
 #![no_main]
 
 use lib::{
-    println,
+    cstr16, println,
     uefi::{
         helper,
-        protocols::{LoadedImageProtocol, Protocol, ProtocolLocateError, SimpleFileSystemProtocol},
+        protocols::{
+            FileAttribute, FileMode, LoadedImageProtocol, Protocol, ProtocolLocateError,
+            SimpleFileSystemProtocol,
+        },
         status::Status,
         Handle, SystemTable,
     },
@@ -35,6 +38,15 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTa
     let res = SimpleFileSystemProtocol::try_locate(loaded_image.device(), &boot_services);
     let res = unwrap_protocol_result(res);
     let root = res.open_volume().expect("error opening root volume");
+
+    // Open the kernel file
+    let kernel_file = root
+        .open(
+            cstr16!("kernel.bin"),
+            FileMode::Read,
+            FileAttribute::default(),
+        )
+        .expect("Error opening kernel.bin file");
 
     1.into()
 }

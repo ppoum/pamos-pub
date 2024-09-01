@@ -23,4 +23,5 @@ panic = "abort"
 panic = "abort"
 
 [dependencies]
+bitflags = "2.6"
 uefi_macros = { path = "uefi_macros" }

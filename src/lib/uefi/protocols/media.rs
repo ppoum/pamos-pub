@@ -1,16 +1,42 @@
 use core::{ffi::c_void, ptr};
 
+use bitflags::bitflags;
 use uefi_macros::Protocol;
 
 use crate::{
     guid,
     uefi::{
-        status::{EfiResult, Status},
+        status::{EfiResult, Status, StatusError},
+        string::CStr16,
         Guid,
     },
 };
 
 use super::RawProtocol;
+
+bitflags! {
+    #[repr(transparent)]
+    #[derive(PartialEq, Eq)]
+    pub struct FileMode: u64 {
+        const Read      = 0x0000000000000001;
+        const Write     = 0x0000000000000002;
+        const Create    = 0x8000000000000000;
+        const _         = !0;
+    }
+
+    #[repr(transparent)]
+    #[derive(PartialEq, Eq, Default)]
+    pub struct FileAttribute : u64 {
+        const ReadOnly  = 0x0000000000000001;
+        const Hidden    = 0x0000000000000002;
+        const System    = 0x0000000000000004;
+        const Reserved  = 0x0000000000000008;
+        const Directory = 0x0000000000000010;
+        const Archive   = 0x0000000000000020;
+        const ValidAttr = 0x0000000000000037;
+        const _         = !0;
+    }
+}
 
 #[repr(transparent)]
 #[derive(Protocol)]
@@ -44,15 +70,64 @@ impl RawProtocol for RawSimpleFileSystemProtocol {
 #[repr(transparent)]
 pub struct FileProtocol(RawFileProtocol);
 
-impl FileProtocol {}
+impl FileProtocol {
+    pub fn open(
+        &self,
+        file_name: &CStr16,
+        open_mode: FileMode,
+        attributes: FileAttribute,
+    ) -> EfiResult<&FileProtocol> {
+        // Validate file mode
+        if !(open_mode == FileMode::Read
+            || open_mode == FileMode::Read | FileMode::Write
+            || open_mode == FileMode::Read | FileMode::Write | FileMode::Create)
+        {
+            return Err(StatusError::InvalidParameter);
+        }
+
+        if !open_mode.intersects(FileMode::Create) && !attributes.is_empty() {
+            // Attributes can only be used when creating a file
+            return Err(StatusError::InvalidParameter);
+        }
+
+        let mut new_handle: *const RawFileProtocol = ptr::null();
+        let new_handle_ptr: *mut *const RawFileProtocol = &mut new_handle;
+
+        // Safety: File name must be a valid string, file mode can only have a few combinations,
+        // attributes only when creating a file
+        unsafe {
+            (self.0.open)(
+                &self.0 as *const _ as *mut _,
+                new_handle_ptr,
+                file_name.as_ptr(),
+                open_mode.bits(),
+                attributes.bits(),
+            )
+        }
+        .to_result()?;
+
+        // Safety: If call succeeds (checked above), then should be a valid pointer
+        unsafe { Ok(&*(new_handle as *const _)) }
+    }
+}
 
 #[repr(C)]
 struct RawFileProtocol {
     revision: u64,
-    open: *const c_void,
-    close: *const c_void,
-    delete: *const c_void,
-    read: *const c_void,
+    open: unsafe extern "efiapi" fn(
+        this: *mut Self,
+        new_handle: *mut *const RawFileProtocol,
+        file_name: *const u16,
+        open_mode: u64,
+        attributes: u64,
+    ) -> Status,
+    close: unsafe extern "efiapi" fn(this: *mut Self) -> Status,
+    delete: unsafe extern "efiapi" fn(this: *mut Self) -> Status,
+    read: unsafe extern "efiapi" fn(
+        this: *mut Self,
+        buffer_size: *mut usize,
+        buffer: *mut c_void,
+    ) -> Status,
     write: *const c_void,
     get_position: *const c_void,
     set_position: *const c_void,
