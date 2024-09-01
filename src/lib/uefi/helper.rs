@@ -1,5 +1,6 @@
 use core::{
-    fmt, ptr,
+    fmt::{self, Write},
+    ptr,
     sync::atomic::{AtomicPtr, Ordering},
 };
 
@@ -25,42 +26,15 @@ pub fn _get_st_safe<'a>() -> Option<&'a mut SystemTable> {
     unsafe { ptr.as_mut() }
 }
 
-pub fn _print(args: fmt::Arguments, stdout: &mut Output) {
-    let str = args
-        .as_str()
-        .expect("String cannot be formatted at compile-time");
+pub fn _st_is_set() -> bool {
+    _get_st_safe().is_some()
+}
 
-    // Convert string from u8 bytes to u16 UCS-2
-    const BUF_SIZE: usize = 256;
-    let mut buffer = [0_u16; BUF_SIZE];
-    let mut utf16_buf = [0_u16; 2];
-    let mut i = 0;
-
-    for char in str.chars() {
-        if i == BUF_SIZE - 1 {
-            // Flush buffer
-            // Safety: Buffer only contains UCS-2 characters and always
-            //         ends with a null byte
-            let str = unsafe { CStr16::from_u16_unsafe(&buffer) };
-            stdout.write(str);
-            buffer = [0_u16; BUF_SIZE];
-            i = 0;
-        }
-
-        let bytes = char.encode_utf16(&mut utf16_buf);
-        let byte = if bytes.len() == 1 {
-            bytes[0]
-        } else {
-            panic!("Tried printing an invalid UCS-2 character");
-        };
-
-        buffer[i] = byte;
-        i += 1;
+pub fn _print(args: fmt::Arguments, stdout: &mut Output, newline: bool) {
+    if newline {
+        stdout.write_fmt(format_args!("{}\n", args))
+    } else {
+        stdout.write_fmt(args)
     }
-
-    // Flush remaining data
-    // Safety: Buffer only contains UCS-2 characters and always
-    //         ends with a null byte
-    let str = unsafe { CStr16::from_u16_unsafe(&buffer) };
-    stdout.write(str);
+    .expect("error writing to output")
 }

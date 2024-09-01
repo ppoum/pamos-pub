@@ -29,6 +29,10 @@ macro_rules! print {
                 .write($crate::cstr16!($s));
         }
     };
+    ($($arg:tt)*) => {{
+        let stdout = unsafe { $crate::uefi::helper::_get_st_panicking().stdout() };
+        $crate::uefi::helper::_print(core::format_args!($($arg)*), stdout, true);
+    }};
 }
 
 #[macro_export]
@@ -36,8 +40,8 @@ macro_rules! println {
     () => {
         $crate::print!("\n")
     };
-    ($s:expr) => {{
+    ($($arg:tt)*) => {{
         let stdout = unsafe { $crate::uefi::helper::_get_st_panicking().stdout() };
-        $crate::uefi::helper::_print(core::format_args!("{}{}", $s, "\n"), stdout);
+        $crate::uefi::helper::_print(core::format_args!($($arg)*), stdout, true);
     }};
 }
