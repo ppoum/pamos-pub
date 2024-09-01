@@ -4,7 +4,7 @@ use crate::uefi::status::StatusError;
 
 use super::{
     status::{EfiResult, Status},
-    Guid, Handle, TableHeader,
+    Guid, Handle, MemoryType, TableHeader,
 };
 
 #[repr(transparent)]
@@ -32,6 +32,29 @@ impl BootServices {
             Err(e) => Err(e),
         }
     }
+
+    pub(crate) fn allocate_pool(&self, size: usize) -> EfiResult<*mut c_void> {
+        self.allocate_pool_with_mem_type(MemoryType::EfiLoaderData, size)
+    }
+
+    pub(crate) fn allocate_pool_with_mem_type(
+        &self,
+        mem_type: MemoryType,
+        size: usize,
+    ) -> EfiResult<*mut c_void> {
+        let mut buf: *mut c_void = ptr::null_mut();
+        let buf_ptr: *mut *mut c_void = &mut buf;
+
+        unsafe { ((*self.0).allocate_pool)(mem_type, size, buf_ptr) }.to_result()?;
+
+        Ok(buf)
+    }
+
+    pub(crate) fn free_pool<T>(&self, buf: *mut T) -> EfiResult<()> {
+        // Safety: If the buffer reference doesn't point to an allocated pool, the function returns
+        // an error status, so no unwanted action can be taken.
+        unsafe { ((*self.0).free_pool)(buf as *mut c_void) }.to_result()
+    }
 }
 
 #[repr(C)]
@@ -45,8 +68,12 @@ pub(crate) struct RawBootServices {
     allocate_pages: *const c_void,
     free_pages: *const c_void,
     get_memory_map: *const c_void,
-    allocate_pool: *const c_void,
-    free_pool: *const c_void,
+    allocate_pool: unsafe extern "efiapi" fn(
+        pool_type: MemoryType,
+        size: usize,
+        buffer: *mut *mut c_void,
+    ) -> Status,
+    free_pool: unsafe extern "efiapi" fn(buffer: *mut c_void) -> Status,
 
     // Event & Timer Services
     create_event: *const c_void,
