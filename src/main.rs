@@ -15,7 +15,7 @@ use lib::{
         Handle, SystemTable,
     },
 };
-use loader::KernelFile;
+use loader::ElfKernel;
 
 // Helper function for now
 fn unwrap_protocol_result<T>(res: Result<T, ProtocolLocateError>) -> T {
@@ -52,13 +52,13 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTa
         .expect("Error opening kernel.bin file");
     println!("Opened the kernel.bin file");
 
-    let kernel = KernelFile::load_from_file(kernel_file, system_table.boot_services())
+    let _kernel = ElfKernel::load_from_file(kernel_file, system_table.boot_services())
         .expect("error reading kernel file");
 
     println!("Kernel file loaded");
 
-    let exit_code = unsafe { kernel.entrypoint()() };
-    println!("Kernel exited with code: {}", exit_code);
+    // let exit_code = unsafe { kernel.entrypoint()() };
+    // println!("Kernel exited with code: {}", exit_code);
 
     loop {}
 }
