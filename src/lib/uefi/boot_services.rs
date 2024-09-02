@@ -1,10 +1,13 @@
 use core::{ffi::c_void, ptr};
 
-use crate::uefi::status::StatusError;
+use crate::{
+    print,
+    uefi::{helper::AllocatedPool, status::StatusError},
+};
 
 use super::{
     status::{EfiResult, Status},
-    AllocateType, Guid, Handle, MemoryType, PhysicalAddress, TableHeader,
+    AllocateType, Guid, Handle, MemoryType, PhysicalAddress, TableHeader, VirtualAddress,
 };
 
 #[repr(transparent)]
@@ -59,30 +62,98 @@ impl BootServices {
         unsafe { ((*self.0).free_pool)(buf as *mut c_void) }.to_result()
     }
 
+    /// Allocates `n` 4KiB pages for use. `address` can only be none if using [`AllocateType::AnyPages`].
     /// # Safety
-    /// This function allocates the page(s) at the memory specified. It does not try to clean up
-    /// after you're done using the pages. *The caller* needs to free the pages if they are no
-    /// longer using them.
-    pub fn leaky_allocate_pages_at_address(
+    /// The caller must ensure that the provided address is valid. This function allocate the
+    /// page(s) and returns a raw pointer to the pages. It does not try to free the allocation. *The
+    /// caller* needs to free the pages if they are no longer in use.
+    pub fn leaky_allocate_pages(
         &self,
+        allocate_type: AllocateType,
         pages: usize,
-        address: PhysicalAddress,
-    ) -> EfiResult<()> {
-        let mut address = address;
-        // Safety: No issues, any problem will be handled by the call to allocate_pages
+        address: Option<PhysicalAddress>,
+    ) -> EfiResult<PhysicalAddress> {
+        if allocate_type != AllocateType::AnyPages && address.is_none() {
+            // Missing address
+            return Err(StatusError::InvalidParameter);
+        }
+        let mut address = address.unwrap_or_default();
+
+        // Safety: If requirements from function doc are met, no safety issues.
         unsafe {
             ((*self.0).allocate_pages)(
-                AllocateType::Address,
-                MemoryType::EfiLoaderData,
+                allocate_type,
+                MemoryType::EfiLoaderCode,
                 pages,
                 &mut address as *mut _,
             )
         }
-        .to_result()
+        .to_result()?;
+
+        Ok(address)
     }
 
     pub fn free_pages(&self, memory: PhysicalAddress, pages: usize) -> EfiResult<()> {
         unsafe { ((*self.0).free_pages)(memory, pages) }.to_result()
+    }
+
+    pub fn _debug_print_mapped_memory_ranges(&self) -> EfiResult<()> {
+        // Give 0 buffer size to receive actual map size
+        let mut map_size = 0_usize;
+        let mut map_key = 0_usize;
+        let mut descriptor_size = 0_usize;
+        let mut descriptor_version = 0_usize;
+        let res = unsafe {
+            ((*self.0).get_memory_map)(
+                &mut map_size as *mut _,
+                ptr::null_mut() as *mut _,
+                &mut map_key as *mut _,
+                &mut descriptor_size as *mut _,
+                &mut descriptor_version as *mut _,
+            )
+        }
+        .to_result();
+        match res {
+            Ok(()) => {}
+            Err(StatusError::BufferTooSmall) => {}
+            Err(e) => return Err(e),
+        }
+
+        // map_size should now have the proper size
+        let mut pool = AllocatedPool::<[u8]>::try_new(*self, map_size)?;
+        let buf = pool.as_mut();
+
+        unsafe {
+            ((*self.0).get_memory_map)(
+                &mut map_size as *mut _,
+                buf.as_mut_ptr() as *mut _,
+                &mut map_key as *mut _,
+                &mut descriptor_size as *mut _,
+                &mut descriptor_version as *mut _,
+            )
+        }
+        .to_result()?;
+
+        let mut last_end = 0;
+        for i in 0..(map_size / descriptor_size) {
+            let desc =
+                unsafe { &*(buf.as_ptr().add(i * descriptor_size) as *const MemoryDescriptor) };
+            let end = desc.physical_address + desc.num_pages * 4096;
+
+            if i == 0 {
+                print!("{:#x}", desc.physical_address);
+            } else if last_end != desc.physical_address {
+                print!("-{:#x} ", last_end);
+                print!("{:#x}", desc.physical_address);
+            }
+            last_end = end;
+
+            // print!("({:?}) {:#x} ", desc.descriptor_type, desc.physical_address);
+            // if i % 2 == 0 {
+            //     println!()
+            // }
+        }
+        Ok(())
     }
 }
 
@@ -101,7 +172,13 @@ pub(crate) struct RawBootServices {
         address: *mut PhysicalAddress,
     ) -> Status,
     free_pages: unsafe extern "efiapi" fn(memory: PhysicalAddress, pages: usize) -> Status,
-    get_memory_map: *const c_void,
+    get_memory_map: unsafe extern "efiapi" fn(
+        map_size: *mut usize,
+        memory_map: *mut MemoryDescriptor,
+        map_key: *mut usize,
+        descriptor_size: *mut usize,
+        descriptor_version: *mut usize,
+    ) -> Status,
     allocate_pool: unsafe extern "efiapi" fn(
         pool_type: MemoryType,
         size: usize,
@@ -167,4 +244,13 @@ pub(crate) struct RawBootServices {
     copy_mem: *const c_void,
     set_mem: *const c_void,
     create_event_ex: *const c_void,
+}
+
+#[repr(C)]
+pub struct MemoryDescriptor {
+    descriptor_type: MemoryType,
+    physical_address: PhysicalAddress,
+    virtual_address: VirtualAddress,
+    num_pages: u64,
+    attribute: u64,
 }
