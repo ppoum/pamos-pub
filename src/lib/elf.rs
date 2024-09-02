@@ -8,14 +8,14 @@ mod definitions;
 pub use definitions::types::*;
 
 #[repr(C)]
-#[derive(Default)]
+#[derive(Default, Debug)]
 pub struct Elf64Ehdr {
     e_ident: [u8; EI_NIDENT],
     e_type: Elf64Half,
     e_machine: Elf64Half,
     e_version: Elf64Half,
     /// Entry point virtual address
-    e_entry: Elf64Addr,
+    pub e_entry: Elf64Addr,
     /// Program header table file offset
     e_phoff: Elf64Off,
     /// Section header table file offset
@@ -53,11 +53,16 @@ impl Elf64Ehdr {
     pub fn machine(&self) -> ElfMachine {
         self.e_machine.into()
     }
+
+    pub fn program_header_count(&self) -> Elf64Half {
+        self.e_phnum
+    }
 }
 
 #[repr(C)]
+#[derive(Default, Debug)]
 pub struct Elf64Phdr {
-    pub p_type: Elf64Word,
+    p_type: Elf64Word,
     pub p_flags: Elf64Word,
     /// Segment file offset
     pub p_offset: Elf64Off,
@@ -71,4 +76,10 @@ pub struct Elf64Phdr {
     pub p_memsz: Elf64XWord,
     /// Segment alignment, file & memory
     pub p_align: Elf64XWord,
+}
+
+impl Elf64Phdr {
+    pub fn p_type(&self) -> ElfSegmentType {
+        self.p_type.into()
+    }
 }

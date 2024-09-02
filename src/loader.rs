@@ -1,10 +1,10 @@
-use core::fmt::Display;
+use core::{ffi::c_void, fmt::Display};
 
 use lib::{
-    elf::{Elf64Ehdr, ElfClass, ElfDataLayout, ElfMachine, ElfType},
+    elf::{Elf64Ehdr, Elf64Phdr, ElfClass, ElfDataLayout, ElfMachine, ElfSegmentType, ElfType},
     uefi::{
-        protocols::FileProtocol,
-        status::{EfiResult, StatusError},
+        boot_services::BootServices, helper::AllocatedPool, protocols::FileProtocol,
+        status::StatusError,
     },
 };
 
@@ -48,47 +48,89 @@ impl From<StatusError> for KernelHeaderValidationError {
     }
 }
 
-pub struct KernelFile<'a>(&'a FileProtocol);
+pub struct KernelFile {
+    elf_header: Elf64Ehdr,
+    // For now, store the phdrs to keep them from getting freed (might not be needed)
+    _program_headers: AllocatedPool<[Elf64Phdr]>,
+}
 
-impl<'a> KernelFile<'a> {
-    pub fn from_ref(reference: &'a FileProtocol) -> Self {
-        KernelFile(reference)
+impl KernelFile {
+    pub fn load_from_file(
+        file: &FileProtocol,
+        boot_services: BootServices,
+    ) -> Result<Self, KernelHeaderValidationError> {
+        // Read ELF header
+        file.set_position(0)?;
+        let mut ehdr: Elf64Ehdr = Default::default();
+        if !file.read(&mut ehdr)? {
+            return Err(StatusError::LoadError.into());
+        };
+
+        Self::validate_header(&ehdr)?;
+
+        // Read program header(s)
+        let mut program_headers_pool = AllocatedPool::<[Elf64Phdr]>::try_new(
+            boot_services,
+            ehdr.program_header_count() as usize,
+        )?;
+        let program_headers = program_headers_pool.as_mut();
+        for phdr in program_headers.iter_mut() {
+            if !file.read(phdr)? {
+                return Err(StatusError::LoadError.into());
+            };
+        }
+
+        // Load segments
+        for phdr in program_headers {
+            if phdr.p_type() != ElfSegmentType::Load {
+                // Segment does not need to be loaded into memory
+                continue;
+            }
+            // Pages are 4KiB each, round up
+            let page_count = phdr.p_memsz.div_ceil(0x1000) as usize;
+            let segment_base = phdr.p_vaddr - phdr.p_offset;
+            boot_services.leaky_allocate_pages_at_address(page_count, segment_base)?;
+            // Load segment into allocate page(s)
+            file.set_position(phdr.p_offset)?;
+            let ptr: *mut c_void = phdr.p_vaddr as *mut c_void;
+            // Safety: ptr should be pointing to at least `p_filesz` bytes of available memory
+            unsafe { file.read_n_bytes(ptr, phdr.p_filesz as usize) }?;
+        }
+
+        Ok(Self {
+            elf_header: ehdr,
+            _program_headers: program_headers_pool,
+        })
     }
 
-    pub fn validate_header(&self) -> Result<(), KernelHeaderValidationError> {
-        // Read the ELF header
-        self.0.set_position(0)?;
-        let header = self.elf_header()?;
-
-        if !header.valid_magic() {
+    fn validate_header(ehdr: &Elf64Ehdr) -> Result<(), KernelHeaderValidationError> {
+        if !ehdr.valid_magic() {
             return Err(KernelHeaderValidationError::InvalidMagic);
         }
 
-        if header.class() != ElfClass::Class64 {
+        if ehdr.class() != ElfClass::Class64 {
             return Err(KernelHeaderValidationError::InvalidClass);
         }
 
-        if header.data_layout() != ElfDataLayout::Lsb {
+        if ehdr.data_layout() != ElfDataLayout::Lsb {
             return Err(KernelHeaderValidationError::InvalidDataLayout);
         }
 
-        if header.elf_type() != ElfType::Executable {
+        if ehdr.elf_type() != ElfType::Executable {
             return Err(KernelHeaderValidationError::InvalidElfType);
         }
 
-        if header.machine() != ElfMachine::X86_64 {
+        if ehdr.machine() != ElfMachine::X86_64 {
             return Err(KernelHeaderValidationError::InvalidMachineArch);
         }
 
         Ok(())
     }
 
-    pub fn elf_header(&self) -> EfiResult<Elf64Ehdr> {
-        self.0.set_position(0)?;
-        let mut header: Elf64Ehdr = Default::default();
-        match self.0.read(&mut header)? {
-            true => Ok(header),
-            false => Err(StatusError::LoadError),
-        }
+    // # Safety
+    // The ELF entrypoint must not expect any arguments, and should return a usize
+    pub fn entrypoint(&self) -> unsafe extern "C" fn() -> usize {
+        let ptr = self.elf_header.e_entry as *const ();
+        unsafe { core::mem::transmute(ptr) }
     }
 }

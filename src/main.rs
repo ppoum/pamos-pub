@@ -6,7 +6,7 @@ mod loader;
 use lib::{
     cstr16, println,
     uefi::{
-        helper,
+        helper::{self},
         protocols::{
             FileAttribute, FileMode, LoadedImageProtocol, Protocol, ProtocolLocateError,
             SimpleFileSystemProtocol,
@@ -52,11 +52,13 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTa
         .expect("Error opening kernel.bin file");
     println!("Opened the kernel.bin file");
 
-    let kernel = KernelFile::from_ref(kernel_file);
-    if let Err(e) = kernel.validate_header() {
-        panic!("kernel validation error: {}", e);
-    }
-    println!("Kernel file validated");
+    let kernel = KernelFile::load_from_file(kernel_file, system_table.boot_services())
+        .expect("error reading kernel file");
+
+    println!("Kernel file loaded");
+
+    let exit_code = unsafe { kernel.entrypoint()() };
+    println!("Kernel exited with code: {}", exit_code);
 
     loop {}
 }
