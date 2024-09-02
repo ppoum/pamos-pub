@@ -130,6 +130,19 @@ impl FileProtocol {
         Ok(t_size == buf_size)
     }
 
+    /// Reads a file into memory, starting at `ptr` until `ptr+n`. Returns `Ok(true)` if n bytes
+    /// were read, `Ok(false)` if less than n bytes were read, and `Err` if an error occurred.
+    ///
+    /// # Safety
+    /// The pointer must point to a valid memory location, with the following `n` bytes usable.
+    pub unsafe fn read_n_bytes(&self, ptr: *mut c_void, n: usize) -> EfiResult<bool> {
+        let mut buf_size = n;
+        unsafe { (self.0.read)(self as *const _ as *mut _, &mut buf_size as *mut _, ptr) }
+            .to_result()?;
+
+        Ok(buf_size == n)
+    }
+
     pub fn set_position(&self, position: u64) -> EfiResult<()> {
         // Safety: Assumes self is a valid reference
         unsafe { (self.0.set_position)(self as *const _ as *mut _, position) }.to_result()
