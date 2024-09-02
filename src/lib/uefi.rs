@@ -10,6 +10,7 @@ use boot_services::{BootServices, RawBootServices};
 use protocols::Output;
 
 #[repr(C)]
+#[derive(Debug)]
 pub enum MemoryType {
     EfiReservedMemoryType,
     EfiLoaderCode,
@@ -31,6 +32,7 @@ pub enum MemoryType {
 }
 
 #[repr(C)]
+#[derive(PartialEq, Eq)]
 pub enum AllocateType {
     AnyPages,
     MaxAddress,
@@ -39,6 +41,7 @@ pub enum AllocateType {
 }
 
 pub type PhysicalAddress = u64;
+pub type VirtualAddress = u64;
 
 #[repr(transparent)]
 pub struct Guid([u8; 16]);
