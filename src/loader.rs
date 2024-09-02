@@ -2,9 +2,10 @@ use core::{ffi::c_void, fmt::Display};
 
 use lib::{
     elf::{Elf64Ehdr, Elf64Phdr, ElfClass, ElfDataLayout, ElfMachine, ElfSegmentType, ElfType},
+    println,
     uefi::{
         boot_services::BootServices, helper::AllocatedPool, protocols::FileProtocol,
-        status::StatusError,
+        status::StatusError, AllocateType,
     },
 };
 
@@ -48,13 +49,13 @@ impl From<StatusError> for KernelHeaderValidationError {
     }
 }
 
-pub struct KernelFile {
+pub struct ElfKernel {
     elf_header: Elf64Ehdr,
     // For now, store the phdrs to keep them from getting freed (might not be needed)
     _program_headers: AllocatedPool<[Elf64Phdr]>,
 }
 
-impl KernelFile {
+impl ElfKernel {
     pub fn load_from_file(
         file: &FileProtocol,
         boot_services: BootServices,
@@ -88,11 +89,22 @@ impl KernelFile {
             }
             // Pages are 4KiB each, round up
             let page_count = phdr.p_memsz.div_ceil(0x1000) as usize;
-            let segment_base = phdr.p_vaddr - phdr.p_offset;
-            boot_services.leaky_allocate_pages_at_address(page_count, segment_base)?;
-            // Load segment into allocate page(s)
+            // Round to the nearest multiple of 4096
+            let page_aligned_base = phdr.p_vaddr & !(0x1000 - 1);
+            // Difference between the segment's base address (vaddr) and the virtual page's base
+            // address.
+            let page_offset = phdr.p_vaddr - page_aligned_base;
+            let page_base =
+                boot_services.leaky_allocate_pages(AllocateType::AnyPages, page_count, None)?;
+
+            // Load segment into allocated page(s) (with the proper offset into the page)
             file.set_position(phdr.p_offset)?;
-            let ptr: *mut c_void = phdr.p_vaddr as *mut c_void;
+            let ptr: *mut c_void = (page_base + page_offset) as *mut c_void;
+            println!(
+                "DEBUG: Need to create page mapping physical {:#x} to {:#x}",
+                page_base, page_aligned_base
+            );
+
             // Safety: ptr should be pointing to at least `p_filesz` bytes of available memory
             unsafe { file.read_n_bytes(ptr, phdr.p_filesz as usize) }?;
         }
