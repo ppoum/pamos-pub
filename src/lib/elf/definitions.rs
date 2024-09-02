@@ -278,4 +278,33 @@ pub mod types {
             }
         }
     }
+
+    #[derive(PartialEq, Eq)]
+    pub enum ElfSegmentType {
+        Null,
+        Load,
+        Dynamic,
+        Interp,
+        Note,
+        ShLib,
+        Phdr,
+        Tls,
+        Unknown,
+    }
+
+    impl From<Elf64Word> for ElfSegmentType {
+        fn from(value: Elf64Word) -> Self {
+            match value {
+                0 => Self::Null,
+                1 => Self::Load,
+                2 => Self::Dynamic,
+                3 => Self::Interp,
+                4 => Self::Note,
+                5 => Self::ShLib,
+                6 => Self::Phdr,
+                7 => Self::Tls,
+                _ => Self::Unknown,
+            }
+        }
+    }
 }
