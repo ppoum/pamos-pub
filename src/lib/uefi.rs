@@ -1,4 +1,4 @@
-mod boot_services;
+pub mod boot_services;
 pub mod helper;
 pub mod protocols;
 pub mod status;
@@ -29,6 +29,16 @@ pub enum MemoryType {
     EfiUnaceptedMemoryType,
     EfiMaxMemoryType,
 }
+
+#[repr(C)]
+pub enum AllocateType {
+    AnyPages,
+    MaxAddress,
+    Address,
+    MaxAllocateType,
+}
+
+pub type PhysicalAddress = u64;
 
 #[repr(transparent)]
 pub struct Guid([u8; 16]);

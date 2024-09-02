@@ -4,10 +4,11 @@ use crate::uefi::status::StatusError;
 
 use super::{
     status::{EfiResult, Status},
-    Guid, Handle, MemoryType, TableHeader,
+    AllocateType, Guid, Handle, MemoryType, PhysicalAddress, TableHeader,
 };
 
 #[repr(transparent)]
+#[derive(Clone, Copy)]
 pub struct BootServices(*mut RawBootServices);
 
 impl BootServices {
@@ -57,6 +58,32 @@ impl BootServices {
         // an error status, so no unwanted action can be taken.
         unsafe { ((*self.0).free_pool)(buf as *mut c_void) }.to_result()
     }
+
+    /// # Safety
+    /// This function allocates the page(s) at the memory specified. It does not try to clean up
+    /// after you're done using the pages. *The caller* needs to free the pages if they are no
+    /// longer using them.
+    pub fn leaky_allocate_pages_at_address(
+        &self,
+        pages: usize,
+        address: PhysicalAddress,
+    ) -> EfiResult<()> {
+        let mut address = address;
+        // Safety: No issues, any problem will be handled by the call to allocate_pages
+        unsafe {
+            ((*self.0).allocate_pages)(
+                AllocateType::Address,
+                MemoryType::EfiLoaderData,
+                pages,
+                &mut address as *mut _,
+            )
+        }
+        .to_result()
+    }
+
+    pub fn free_pages(&self, memory: PhysicalAddress, pages: usize) -> EfiResult<()> {
+        unsafe { ((*self.0).free_pages)(memory, pages) }.to_result()
+    }
 }
 
 #[repr(C)]
@@ -67,8 +94,13 @@ pub(crate) struct RawBootServices {
     restore_tpl: *const c_void,
 
     // Memory Services
-    allocate_pages: *const c_void,
-    free_pages: *const c_void,
+    allocate_pages: unsafe extern "efiapi" fn(
+        allocate_type: AllocateType,
+        memory_type: MemoryType,
+        pages: usize,
+        address: *mut PhysicalAddress,
+    ) -> Status,
+    free_pages: unsafe extern "efiapi" fn(memory: PhysicalAddress, pages: usize) -> Status,
     get_memory_map: *const c_void,
     allocate_pool: unsafe extern "efiapi" fn(
         pool_type: MemoryType,
