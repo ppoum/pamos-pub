@@ -30,7 +30,7 @@ impl Display for KernelHeaderValidationError {
                 write!(f, "invalid ELF data layout (only LSB is supported)")
             }
             KernelHeaderValidationError::InvalidElfType => {
-                write!(f, "invalid ELF type (only ET_EXEC or ET_DYN is supported)")
+                write!(f, "invalid ELF type (only ET_EXEC is supported)")
             }
             KernelHeaderValidationError::InvalidMachineArch => {
                 write!(
@@ -72,7 +72,7 @@ impl<'a> KernelFile<'a> {
             return Err(KernelHeaderValidationError::InvalidDataLayout);
         }
 
-        if header.elf_type() != ElfType::Executable && header.elf_type() != ElfType::Dynamic {
+        if header.elf_type() != ElfType::Executable {
             return Err(KernelHeaderValidationError::InvalidElfType);
         }
 
