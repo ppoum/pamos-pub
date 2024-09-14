@@ -1,4 +1,4 @@
-use core::{ffi::c_void, fmt::Display};
+use core::{arch::asm, ffi::c_void, fmt::Display, ops::RangeBounds};
 
 use lib::{
     elf::{Elf64Ehdr, Elf64Phdr, ElfClass, ElfDataLayout, ElfMachine, ElfSegmentType, ElfType},
@@ -49,10 +49,31 @@ impl From<StatusError> for KernelHeaderValidationError {
     }
 }
 
+struct LoaderMapEntry {
+    pub v_addr: u64,
+    pub len: u64,
+    pub p_addr: u64,
+}
+
+impl LoaderMapEntry {
+    /// Returns `Some(n)`, where n is the physical address, if the `address` is contained within
+    /// this map. Returns `None` if the virtual address is outside the range of this map.
+    pub fn translate_virtual_to_physical(&self, address: u64) -> Option<u64> {
+        if (self.v_addr..(self.v_addr + self.len)).contains(&address) {
+            let offset = address - self.v_addr;
+            Some(self.p_addr + offset)
+        } else {
+            None
+        }
+    }
+}
+
 pub struct ElfKernel {
     elf_header: Elf64Ehdr,
     // For now, store the phdrs to keep them from getting freed (might not be needed)
     _program_headers: AllocatedPool<[Elf64Phdr]>,
+    // Maps of virtual addr to physical addr
+    map_entries: AllocatedPool<[LoaderMapEntry]>,
 }
 
 impl ElfKernel {
@@ -82,7 +103,12 @@ impl ElfKernel {
         }
 
         // Load segments
-        for phdr in program_headers {
+        // Max 1 map per segment (should be less, since only 1 map per LOAD segment)
+        let mut map_entries = AllocatedPool::<[LoaderMapEntry]>::try_new(
+            boot_services,
+            ehdr.program_header_count() as usize,
+        )?;
+        for (i, phdr) in program_headers.iter().enumerate() {
             if phdr.p_type() != ElfSegmentType::Load {
                 // Segment does not need to be loaded into memory
                 continue;
@@ -96,6 +122,13 @@ impl ElfKernel {
             let page_offset = phdr.p_vaddr - page_aligned_base;
             let page_base =
                 boot_services.leaky_allocate_pages(AllocateType::AnyPages, page_count, None)?;
+
+            // Register page map requirement
+            map_entries.as_mut()[i] = LoaderMapEntry {
+                v_addr: page_aligned_base,
+                len: page_count as u64 * 0x1000,
+                p_addr: page_base,
+            };
 
             // Load segment into allocated page(s) (with the proper offset into the page)
             file.set_position(phdr.p_offset)?;
@@ -112,6 +145,7 @@ impl ElfKernel {
         Ok(Self {
             elf_header: ehdr,
             _program_headers: program_headers_pool,
+            map_entries,
         })
     }
 
@@ -139,10 +173,25 @@ impl ElfKernel {
         Ok(())
     }
 
-    // # Safety
-    // The ELF entrypoint must not expect any arguments, and should return a usize
+    fn entrypoint_addr(&self) -> u64 {
+        let v_entry = self.elf_header.e_entry;
+
+        // Translate entrypoint from virtual to physical address
+        let mut p_addr = None;
+        for map in self.map_entries.as_ref() {
+            if let Some(a) = map.translate_virtual_to_physical(v_entry) {
+                p_addr = Some(a);
+                break;
+            }
+        }
+
+        p_addr.expect("Could not convert kernel entrypoint to a physical address")
+    }
+
+    /// # Safety
+    /// The ELF entrypoint must not expect any arguments, and should return a usize
     pub fn entrypoint(&self) -> unsafe extern "C" fn() -> usize {
-        let ptr = self.elf_header.e_entry as *const ();
+        let ptr = self.entrypoint_addr() as *const ();
         unsafe { core::mem::transmute(ptr) }
     }
 }
