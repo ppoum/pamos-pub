@@ -97,12 +97,58 @@ impl BootServices {
         unsafe { ((*self.0).free_pages)(memory, pages) }.to_result()
     }
 
-    pub fn _debug_print_mapped_memory_ranges(&self) -> EfiResult<()> {
-        // Give 0 buffer size to receive actual map size
+    pub fn memory_map(&self) -> EfiResult<MemoryMap> {
+        // Since we allocate between this call and the next call to GetMemoryMap, double the buffer
+        // size needed to ensure the 2 allocations below don't cause the map to get bigger than the
+        // buffer.
+        let mut map_size = 2 * self.memory_map_size()?;
+
+        let mut pool = AllocatedPool::<[u8]>::try_new(*self, map_size)?;
+        let buf = pool.as_mut();
+
+        // NOTE: Avoid allocating after the call to GetMemoryMap (estimate the size)
+        let mut desc_pool = {
+            let desc_count_overestimate = map_size / size_of::<MemoryDescriptor>();
+            AllocatedPool::<[MemoryDescriptor]>::try_new(*self, desc_count_overestimate)?
+        };
+
+        let mut map_key = 0_usize;
+        let mut desc_size = 0_usize;
+        let mut desc_version = 0_usize;
+
+        unsafe {
+            ((*self.0).get_memory_map)(
+                &mut map_size as *mut _,
+                buf.as_mut_ptr() as *mut _,
+                &mut map_key as *mut _,
+                &mut desc_size as *mut _,
+                &mut desc_version as *mut _,
+            )
+        }
+        .to_result()?;
+
+        let descriptor_count = map_size / desc_size;
+
+        // NOTE: We could probably make this cleaner and avoid "wasting" one allocation by simply
+        // including this logic within the MemoryMap implementation, thus removing the need to copy
+        // the map into the new struct.
+        for i in 0..descriptor_count {
+            let desc = unsafe { &*(buf.as_ptr().add(i * desc_size) as *const MemoryDescriptor) };
+            desc_pool[i] = *desc;
+        }
+
+        Ok(MemoryMap::new(desc_pool, descriptor_count, map_key))
+    }
+
+    /// Gets the buffer size needed to hold the memory map by calling GetMemoryMap with a buffer
+    /// size of 0.
+    fn memory_map_size(&self) -> EfiResult<usize> {
+        // Call GetMemoryMap with a buffer size of 0, expect BufferTooSmall
         let mut map_size = 0_usize;
         let mut map_key = 0_usize;
         let mut descriptor_size = 0_usize;
         let mut descriptor_version = 0_usize;
+
         let res = unsafe {
             ((*self.0).get_memory_map)(
                 &mut map_size as *mut _,
@@ -113,47 +159,14 @@ impl BootServices {
             )
         }
         .to_result();
+
         match res {
-            Ok(()) => {}
+            Ok(()) => panic!("Call to GetMemoryMap succeeded when it should have failed!"),
             Err(StatusError::BufferTooSmall) => {}
             Err(e) => return Err(e),
         }
 
-        // map_size should now have the proper size
-        let mut pool = AllocatedPool::<[u8]>::try_new(*self, map_size)?;
-        let buf = pool.as_mut();
-
-        unsafe {
-            ((*self.0).get_memory_map)(
-                &mut map_size as *mut _,
-                buf.as_mut_ptr() as *mut _,
-                &mut map_key as *mut _,
-                &mut descriptor_size as *mut _,
-                &mut descriptor_version as *mut _,
-            )
-        }
-        .to_result()?;
-
-        let mut last_end = 0;
-        for i in 0..(map_size / descriptor_size) {
-            let desc =
-                unsafe { &*(buf.as_ptr().add(i * descriptor_size) as *const MemoryDescriptor) };
-            let end = desc.physical_address + desc.num_pages * 4096;
-
-            if i == 0 {
-                print!("{:#x}", desc.physical_address);
-            } else if last_end != desc.physical_address {
-                print!("-{:#x} ", last_end);
-                print!("{:#x}", desc.physical_address);
-            }
-            last_end = end;
-
-            // print!("({:?}) {:#x} ", desc.descriptor_type, desc.physical_address);
-            // if i % 2 == 0 {
-            //     println!()
-            // }
-        }
-        Ok(())
+        Ok(map_size)
     }
 }
 
@@ -247,10 +260,35 @@ pub(crate) struct RawBootServices {
 }
 
 #[repr(C)]
+#[derive(Debug, Clone, Copy)]
 pub struct MemoryDescriptor {
     descriptor_type: MemoryType,
     physical_address: PhysicalAddress,
     virtual_address: VirtualAddress,
     num_pages: u64,
     attribute: u64,
+}
+
+pub struct MemoryMap {
+    descriptors: AllocatedPool<[MemoryDescriptor]>,
+    descriptor_count: usize,
+    map_key: usize,
+}
+
+impl MemoryMap {
+    pub fn new(
+        descriptors: AllocatedPool<[MemoryDescriptor]>,
+        descriptor_count: usize,
+        map_key: usize,
+    ) -> Self {
+        Self {
+            descriptors,
+            descriptor_count,
+            map_key,
+        }
+    }
+
+    pub fn key(&self) -> usize {
+        self.map_key
+    }
 }
