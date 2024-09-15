@@ -1,7 +1,7 @@
 use core::{
     ffi::c_void,
     fmt::{self, Write},
-    ptr,
+    ops, ptr,
     sync::atomic::{AtomicPtr, Ordering},
 };
 
@@ -135,6 +135,20 @@ impl<T> AsMut<[T]> for AllocatedPool<[T]> {
                 ),
             )
         }
+    }
+}
+
+impl<T> ops::Index<usize> for AllocatedPool<[T]> {
+    type Output = T;
+
+    fn index(&self, index: usize) -> &Self::Output {
+        &self.as_ref()[index]
+    }
+}
+
+impl<T> ops::IndexMut<usize> for AllocatedPool<[T]> {
+    fn index_mut(&mut self, index: usize) -> &mut Self::Output {
+        &mut self.as_mut()[index]
     }
 }
 
