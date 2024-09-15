@@ -10,7 +10,7 @@ use boot_services::{BootServices, RawBootServices};
 use protocols::Output;
 
 #[repr(C)]
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum MemoryType {
     EfiReservedMemoryType,
     EfiLoaderCode,
