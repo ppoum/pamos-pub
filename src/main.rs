@@ -62,6 +62,11 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTa
         .expect("Error getting memory map");
     println!("Got memory map with key: {}", mmap.key());
 
+    println!("Exiting boot services...");
+    boot_services
+        .exit_boot_services(image_handle, mmap.key())
+        .expect("Error exiting boot services");
+
     // let exit_code = unsafe { kernel.entrypoint()() };
     // println!("Kernel exited with code: {}", exit_code);
 

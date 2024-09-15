@@ -1,9 +1,6 @@
 use core::{ffi::c_void, ptr};
 
-use crate::{
-    print,
-    uefi::{helper::AllocatedPool, status::StatusError},
-};
+use crate::uefi::{helper::AllocatedPool, status::StatusError};
 
 use super::{
     status::{EfiResult, Status},
@@ -168,6 +165,10 @@ impl BootServices {
 
         Ok(map_size)
     }
+
+    pub fn exit_boot_services(self, image_handle: Handle, map_key: usize) -> EfiResult<()> {
+        unsafe { ((*self.0).exit_boot_services)(image_handle, map_key) }.to_result()
+    }
 }
 
 #[repr(C)]
@@ -227,7 +228,7 @@ pub(crate) struct RawBootServices {
     start_image: *const c_void,
     exit: *const c_void,
     unload_image: *const c_void,
-    exit_boot_services: *const c_void,
+    exit_boot_services: unsafe extern "efiapi" fn(image_handle: Handle, map_key: usize) -> Status,
 
     // Miscellaneous Services
     get_next_monotonic_count: *const c_void,
