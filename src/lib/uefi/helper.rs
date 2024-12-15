@@ -13,17 +13,8 @@ pub static _ST: AtomicPtr<SystemTable> = AtomicPtr::new(ptr::null_mut());
 
 #[panic_handler]
 fn _panic_handler(panic_info: &core::panic::PanicInfo) -> ! {
-    // NOTE: PanicInfo#payload isn't created in core, since it requires allocation.
-    //
     if _st_is_set() {
-        println!("panic occurred: {:?}", panic_info);
-        // FIXME: PanicInfo#message is getting stabilized in 1.81
-
-        // if let Some(msg) = panic_info.message() {
-        //     println!("panic occurred: {}", msg);
-        // } else {
-        //     println!("panic occurred");
-        // }
+        println!("panic occurred: {}", panic_info.message());
     }
     loop {}
 }
