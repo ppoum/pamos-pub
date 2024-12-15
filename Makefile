@@ -49,3 +49,25 @@ debug-nowait: .esp-dbg/EFI/BOOT/BOOTX64.EFI .esp-dbg/kernel.bin
 		-drive \
 		if=pflash,format=raw,readonly=on,file=$(OVMF_PATH)/OVMF_VARS.fd \
 		-net none -drive file=fat:rw:.esp-dbg,format=raw
+
+pamos.img: $(RELEASE_BIN_PATH) .esp/kernel.bin
+	rm -f $@
+	dd if=/dev/zero of=$@ bs=1M count=128
+	mkfs.fat -F 32 $@
+	mmd -i $@ ::/EFI
+	mmd -i $@ ::/EFI/BOOT
+	mcopy -i $@ $< ::/EFI/BOOT/BOOTX64.EFI
+	mcopy -i $@ .esp/kernel.bin ::/kernel.bin
+
+pamos-dbg.img: $(DEBUG_BIN_PATH) .esp-dbg/kernel.bin
+	rm -f $@
+	dd if=/dev/zero of=$@ bs=1M count=128
+	mkfs.fat -F 32 $@
+	mmd -i $@ ::/EFI
+	mmd -i $@ ::/EFI/BOOT
+	mcopy -i $@ $< ::/EFI/BOOT/BOOTX64.EFI
+	mcopy -i $@ .esp-dbg/kernel.bin ::/kernel.bin
+
+img: pamos.img
+
+debug-img: pamos-dbg.img
