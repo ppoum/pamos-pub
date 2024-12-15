@@ -1,7 +1,9 @@
-use core::{arch::asm, ffi::c_void, fmt::Display, ops::RangeBounds};
+use core::{arch::asm, ffi::c_void, fmt::Display};
 
 use lib::{
     elf::{Elf64Ehdr, Elf64Phdr, ElfClass, ElfDataLayout, ElfMachine, ElfSegmentType, ElfType},
+    multiboot2::BootInformationWriter,
+    paging::{self, Pml4},
     println,
     uefi::{
         boot_services::BootServices, helper::AllocatedPool, protocols::FileProtocol,
@@ -120,8 +122,11 @@ impl ElfKernel {
             // Difference between the segment's base address (vaddr) and the virtual page's base
             // address.
             let page_offset = phdr.p_vaddr - page_aligned_base;
-            let page_base =
-                boot_services.leaky_allocate_pages(AllocateType::AnyPages, page_count, None)?;
+            let page_base = boot_services.leaky_allocate_pages(
+                AllocateType::MaxAddress,
+                page_count,
+                Some(0x18000),
+            )?;
 
             // Register page map requirement
             map_entries.as_mut()[i] = LoaderMapEntry {
@@ -133,10 +138,6 @@ impl ElfKernel {
             // Load segment into allocated page(s) (with the proper offset into the page)
             file.set_position(phdr.p_offset)?;
             let ptr: *mut c_void = (page_base + page_offset) as *mut c_void;
-            println!(
-                "DEBUG: Need to create page mapping physical {:#x} to {:#x}",
-                page_base, page_aligned_base
-            );
 
             // Safety: ptr should be pointing to at least `p_filesz` bytes of available memory
             unsafe { file.read_n_bytes(ptr, phdr.p_filesz as usize) }?;
@@ -189,9 +190,70 @@ impl ElfKernel {
     }
 
     /// # Safety
-    /// The ELF entrypoint must not expect any arguments, and should return a usize
-    pub fn entrypoint(&self) -> unsafe extern "C" fn() -> usize {
-        let ptr = self.entrypoint_addr() as *const ();
-        unsafe { core::mem::transmute(ptr) }
+    /// This function will panic if the resulting MB2 structure is larger than the allocated
+    /// buffer.
+    pub fn generate_mb2_info(&self, buffer: &mut AllocatedPool<[u8]>) -> *mut u8 {
+        // Generate the MB2 boot info
+        // Lazy: allocate a hard-coded 1000 bytes (will panic if the boot info is larger)
+        // Safety: Writer is bounded by the buffer's allocation
+        let writer = unsafe { BootInformationWriter::new(buffer.as_mut().as_mut_ptr(), 1000) };
+        let mb2_ptr = writer.close();
+        println!("D: MB2 info ptr: {:p}", mb2_ptr);
+        mb2_ptr
+    }
+
+    pub fn call_mb2_entrypoint(&self, mb2_ptr: *mut u8, pml4_ptr: *mut Pml4) -> ! {
+        pub const EAX_MB2_MAGIC: u32 = 0x36d76289;
+        let entry = self.entrypoint_addr();
+        unsafe {
+            asm!(
+                "mov rbx, {mb2_ptr}",
+                // EAX: MB2 magic, RCX: PML4 ptr
+                "call rdx",
+                in("eax") EAX_MB2_MAGIC,
+                mb2_ptr = in(reg) mb2_ptr,
+                in("rcx") pml4_ptr,
+                in("rdx") entry,
+            );
+        }
+        panic!("Returned from call to kernel!")
+    }
+
+    /// Creates the required paging tables for identity mapping the first 4MiB, mapping the kernel
+    /// into the upper half and allocating the stack/heap region
+    pub fn initialize_paging_structures(&self, boot_services: BootServices) -> &'static mut Pml4 {
+        let pml4 = Pml4::new_allocate_empty(boot_services);
+
+        // Identity map the first 4MB
+        paging::map_range(boot_services, pml4, 0x0, 0x0, 1024);
+
+        // Upper half mapping
+        for loader_map_entry in self.map_entries.as_ref() {
+            // Only create new page maps for higher half mappings (This assumes that all the code
+            // not found in the higher half is already identity map. This is currently true, as it
+            // only includes the bootstrapping assembly code)
+            if loader_map_entry.v_addr >= 0xFFFF800000000000 {
+                let page_cnt = loader_map_entry.len / 0x1000;
+                println!(
+                    "D: Mapping {:#x} to {:#x} ({})",
+                    loader_map_entry.v_addr, loader_map_entry.p_addr, page_cnt
+                );
+                paging::map_range(
+                    boot_services,
+                    pml4,
+                    loader_map_entry.v_addr,
+                    loader_map_entry.p_addr,
+                    page_cnt,
+                );
+            }
+        }
+
+        // Stack & heap (0x18000 to 0x20000)
+        let base = boot_services
+            .leaky_allocate_pages(AllocateType::MaxAddress, 8, Some(0x30000))
+            .expect("Error allocating stack memory page");
+        paging::map_range(boot_services, pml4, 0x18000, base, 8);
+
+        pml4
     }
 }

@@ -6,7 +6,7 @@ mod loader;
 use lib::{
     cstr16, println,
     uefi::{
-        helper::{self},
+        helper::{self, AllocatedPool},
         protocols::{
             FileAttribute, FileMode, LoadedImageProtocol, Protocol, ProtocolLocateError,
             SimpleFileSystemProtocol,
@@ -32,8 +32,6 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTa
     helper::register_services(&system_table);
     let boot_services = system_table.boot_services();
 
-    println!("Hello, World!");
-
     let res = LoadedImageProtocol::try_locate(image_handle, &boot_services);
     let loaded_image = unwrap_protocol_result(res);
 
@@ -52,23 +50,27 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTa
         .expect("Error opening kernel.bin file");
     println!("Opened the kernel.bin file");
 
-    let _kernel = ElfKernel::load_from_file(kernel_file, system_table.boot_services())
+    let kernel = ElfKernel::load_from_file(kernel_file, system_table.boot_services())
         .expect("error reading kernel file");
 
-    println!("Kernel file loaded");
+    println!("I: Kernel file loaded");
 
+    println!("I: Generating the MB2 info structure");
+    // Lazy: allocate a hard-coded 1000 bytes (will panic if the boot info is larger)
+    let mut buf =
+        AllocatedPool::<[u8]>::try_new(boot_services, 1000).expect("Error allocating MB2 buffer");
+    let mb2_ptr = kernel.generate_mb2_info(&mut buf);
+    let pml4_ptr = kernel.initialize_paging_structures(boot_services);
+
+    println!("I: Exiting boot services and entering kernel");
     let mmap = boot_services
         .memory_map()
         .expect("Error getting memory map");
-    println!("Got memory map with key: {}", mmap.key());
 
-    println!("Exiting boot services...");
+    // Avoid printing, it seems like SimpleTextOutputProtocol.OutputString sometimes allocates?
     boot_services
         .exit_boot_services(image_handle, mmap.key())
         .expect("Error exiting boot services");
 
-    // let exit_code = unsafe { kernel.entrypoint()() };
-    // println!("Kernel exited with code: {}", exit_code);
-
-    loop {}
+    kernel.call_mb2_entrypoint(mb2_ptr, pml4_ptr as *mut _);
 }
