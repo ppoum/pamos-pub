@@ -20,21 +20,21 @@ $(DEBUG_BIN_PATH): $(RUST_SRC)
 	cp $< $@
 
 qemu: .esp/EFI/BOOT/BOOTX64.EFI
-	qemu-system-x86_64 -enable-kvm -s -drive \
+	qemu-system-x86_64 -d int,cpu_reset -enable-kvm -s -drive \
 		if=pflash,format=raw,readonly=on,file=$(OVMF_PATH)/OVMF_CODE.fd \
 		-drive \
 		if=pflash,format=raw,readonly=on,file=$(OVMF_PATH)/OVMF_VARS.fd \
 		-net none -drive file=fat:rw:.esp,format=raw
 
 debug: .esp-dbg/EFI/BOOT/BOOTX64.EFI
-	qemu-system-x86_64 -enable-kvm -s -S -drive \
+	qemu-system-x86_64 -d int,cpu_reset -enable-kvm -s -S -drive \
 		if=pflash,format=raw,readonly=on,file=$(OVMF_PATH)/OVMF_CODE.fd \
 		-drive \
 		if=pflash,format=raw,readonly=on,file=$(OVMF_PATH)/OVMF_VARS.fd \
 		-net none -drive file=fat:rw:.esp-dbg,format=raw
 
 debug-nowait: .esp-dbg/EFI/BOOT/BOOTX64.EFI
-	qemu-system-x86_64 -enable-kvm -s -drive \
+	qemu-system-x86_64 -d int,cpu_reset -enable-kvm -s -drive \
 		if=pflash,format=raw,readonly=on,file=$(OVMF_PATH)/OVMF_CODE.fd \
 		-drive \
 		if=pflash,format=raw,readonly=on,file=$(OVMF_PATH)/OVMF_VARS.fd \
