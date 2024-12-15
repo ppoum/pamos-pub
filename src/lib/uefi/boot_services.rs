@@ -96,18 +96,12 @@ impl BootServices {
 
     pub fn memory_map(&self) -> EfiResult<MemoryMap> {
         // Since we allocate between this call and the next call to GetMemoryMap, double the buffer
-        // size needed to ensure the 2 allocations below don't cause the map to get bigger than the
+        // size needed to ensure the allocation below doesn't cause the map to get bigger than the
         // buffer.
         let mut map_size = 2 * self.memory_map_size()?;
 
         let mut pool = AllocatedPool::<[u8]>::try_new(*self, map_size)?;
         let buf = pool.as_mut();
-
-        // NOTE: Avoid allocating after the call to GetMemoryMap (estimate the size)
-        let mut desc_pool = {
-            let desc_count_overestimate = map_size / size_of::<MemoryDescriptor>();
-            AllocatedPool::<[MemoryDescriptor]>::try_new(*self, desc_count_overestimate)?
-        };
 
         let mut map_key = 0_usize;
         let mut desc_size = 0_usize;
@@ -126,15 +120,7 @@ impl BootServices {
 
         let descriptor_count = map_size / desc_size;
 
-        // NOTE: We could probably make this cleaner and avoid "wasting" one allocation by simply
-        // including this logic within the MemoryMap implementation, thus removing the need to copy
-        // the map into the new struct.
-        for i in 0..descriptor_count {
-            let desc = unsafe { &*(buf.as_ptr().add(i * desc_size) as *const MemoryDescriptor) };
-            desc_pool[i] = *desc;
-        }
-
-        Ok(MemoryMap::new(desc_pool, descriptor_count, map_key))
+        Ok(MemoryMap::new(pool, descriptor_count, desc_size, map_key))
     }
 
     /// Gets the buffer size needed to hold the memory map by calling GetMemoryMap with a buffer
@@ -271,25 +257,47 @@ pub struct MemoryDescriptor {
 }
 
 pub struct MemoryMap {
-    descriptors: AllocatedPool<[MemoryDescriptor]>,
+    memory_map: AllocatedPool<[u8]>,
     descriptor_count: usize,
+    descriptor_size: usize,
     map_key: usize,
 }
 
 impl MemoryMap {
     pub fn new(
-        descriptors: AllocatedPool<[MemoryDescriptor]>,
+        memory_map: AllocatedPool<[u8]>,
         descriptor_count: usize,
+        descriptor_size: usize,
         map_key: usize,
     ) -> Self {
         Self {
-            descriptors,
+            memory_map,
             descriptor_count,
+            descriptor_size,
             map_key,
         }
     }
 
     pub fn key(&self) -> usize {
         self.map_key
+    }
+
+    pub fn into_descriptors(
+        &self,
+        boot_services: BootServices,
+    ) -> EfiResult<AllocatedPool<[MemoryDescriptor]>> {
+        let mut pool =
+            AllocatedPool::<[MemoryDescriptor]>::try_new(boot_services, self.descriptor_count)?;
+        for i in 0..self.descriptor_count {
+            let desc = unsafe {
+                &*(self
+                    .memory_map
+                    .as_ref()
+                    .as_ptr()
+                    .add(i * self.descriptor_size) as *const MemoryDescriptor)
+            };
+            pool[i] = *desc;
+        }
+        Ok(pool)
     }
 }
