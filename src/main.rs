@@ -6,12 +6,13 @@ mod loader;
 use lib::{
     cstr16, println,
     uefi::{
+        boot_services::BootServices,
         helper::{self, AllocatedPool},
         protocols::{
-            FileAttribute, FileMode, LoadedImageProtocol, Protocol, ProtocolLocateError,
-            SimpleFileSystemProtocol,
+            FileAttribute, FileMode, GraphicsOutputProtocol, LoadedImageProtocol, Protocol,
+            ProtocolLocateError, SimpleFileSystemProtocol,
         },
-        status::Status,
+        status::{EfiResult, Status, StatusError},
         Handle, SystemTable,
     },
 };
@@ -30,6 +31,8 @@ fn unwrap_protocol_result<T>(res: Result<T, ProtocolLocateError>) -> T {
 pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTable) -> Status {
     helper::register_services(&system_table);
     let boot_services = system_table.boot_services();
+
+    configure_framebuffer(&boot_services).unwrap();
 
     let res = LoadedImageProtocol::try_locate_from_handle(image_handle, &boot_services);
     let loaded_image = unwrap_protocol_result(res);
@@ -73,4 +76,53 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTa
         .expect("Error exiting boot services");
 
     kernel.call_mb2_entrypoint(mb2_ptr, pml4_ptr as *mut _);
+}
+
+/// Initialize the Graphics Output device (if required), and set the mode to the highest resolution
+/// available (where highest means largest pixel count).
+pub fn configure_framebuffer(boot_services: &BootServices) -> EfiResult<()> {
+    let graphics_protocol =
+        unwrap_protocol_result(GraphicsOutputProtocol::try_locate(boot_services));
+    // If mode is null, use mode number 0
+    let current_mode = graphics_protocol.mode().map(|m| m.mode).unwrap_or_default();
+    match graphics_protocol.query_mode(current_mode) {
+        Ok(_) => {}
+        Err(StatusError::NotStarted) => {
+            // Not started, set mode 0
+            graphics_protocol.set_mode(0)?;
+        }
+        Err(e) => panic!("Unexpected error configuring framebuffer: {:?}", e),
+    };
+
+    let (min, max) = graphics_protocol
+        .mode()
+        .map(|m| (m.mode, m.max_mode))
+        .expect("FB mode should not be null");
+
+    // Select the mode with the highest resolution
+    // NOTE: Is there a better heuristic we can use here?
+    let mut highest = 0;
+    let mut highest_idx = 0;
+    let mut highest_info = None;
+    for i in min..max {
+        let mode = graphics_protocol.query_mode(i)?;
+        let res_cnt = mode.vertical_res * mode.horizontal_res;
+        if res_cnt > highest {
+            highest = res_cnt;
+            highest_idx = i;
+            highest_info = Some(mode);
+        }
+    }
+
+    // If this is still None, then unexpected modes in loop above
+    let highest_info = highest_info.unwrap();
+    if current_mode != highest_idx {
+        graphics_protocol.set_mode(highest_idx)?;
+        println!(
+            "D: Changing FB mode to {}x{}",
+            highest_info.horizontal_res, highest_info.vertical_res
+        );
+    }
+
+    Ok(())
 }
