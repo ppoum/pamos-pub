@@ -31,11 +31,12 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTa
     helper::register_services(&system_table);
     let boot_services = system_table.boot_services();
 
-    let res = LoadedImageProtocol::try_locate(image_handle, &boot_services);
+    let res = LoadedImageProtocol::try_locate_from_handle(image_handle, &boot_services);
     let loaded_image = unwrap_protocol_result(res);
 
     // Get volume from our EFI app handle and open root path
-    let res = SimpleFileSystemProtocol::try_locate(loaded_image.device(), &boot_services);
+    let res =
+        SimpleFileSystemProtocol::try_locate_from_handle(loaded_image.device(), &boot_services);
     let res = unwrap_protocol_result(res);
     let root = res.open_volume().expect("error opening root volume");
 

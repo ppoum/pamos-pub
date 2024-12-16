@@ -16,7 +16,7 @@ pub enum ProtocolLocateError {
 pub trait RawProtocol: Sized {
     const GUID: Guid;
 
-    fn try_locate_protocol(
+    fn try_locate_protocol_from_handle(
         boot_services: &BootServices,
         handle: Handle,
     ) -> Result<*const Self, ProtocolLocateError> {
@@ -29,11 +29,25 @@ pub trait RawProtocol: Sized {
 
         Ok(void_interface as *const Self)
     }
+
+    fn try_locate_protocol(
+        boot_services: &BootServices,
+    ) -> Result<*const Self, ProtocolLocateError> {
+        let res = boot_services.generic_locate_protocol(&Self::GUID);
+        let void_interface = match res {
+            Ok(Some(x)) => x,
+            Ok(None) => return Err(ProtocolLocateError::Unsupported),
+            Err(e) => return Err(ProtocolLocateError::Error(e)),
+        };
+        Ok(void_interface as *const Self)
+    }
 }
 
 pub trait Protocol {
-    fn try_locate(
+    fn try_locate_from_handle(
         handle: Handle,
         boot_services: &BootServices,
     ) -> Result<&Self, ProtocolLocateError>;
+
+    fn try_locate(boot_services: &BootServices) -> Result<&Self, ProtocolLocateError>;
 }

@@ -25,11 +25,16 @@ pub fn protocol_derive(input: TokenStream) -> TokenStream {
 
     quote! {
         impl crate::uefi::protocols::Protocol for #ident {
-            fn try_locate(
+            fn try_locate_from_handle(
                 handle: crate::uefi::Handle,
                 boot_services: &crate::uefi::BootServices
             ) -> Result<&Self, crate::uefi::protocols::ProtocolLocateError> {
-                let raw = #field_type::try_locate_protocol(boot_services, handle)?;
+                let raw = #field_type::try_locate_protocol_from_handle(boot_services, handle)?;
+                unsafe { Ok(&*(raw as *const Self)) }
+            }
+
+            fn try_locate(boot_services: &crate::uefi::BootServices) -> Result<&Self, crate::uefi::protocols::ProtocolLocateError> {
+                let raw = #field_type::try_locate_protocol(boot_services)?;
                 unsafe { Ok(&*(raw as *const Self)) }
             }
         }

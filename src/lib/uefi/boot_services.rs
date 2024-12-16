@@ -23,13 +23,29 @@ impl BootServices {
     ) -> EfiResult<Option<*const c_void>> {
         let mut interface: *const c_void = ptr::null();
         let interface_ptr: *mut *const c_void = &mut interface;
-        // // Safety: Handled on the EFI side, our data structures aren't null
+        // Safety: Handled on the EFI side, our data structures aren't null
         let result =
             unsafe { ((*self.0).handle_protocol)(handle, protocol, interface_ptr) }.to_result();
 
         match result {
             Ok(()) => Ok(Some(interface)),
             Err(StatusError::Unsupported) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    pub(crate) fn generic_locate_protocol(
+        &self,
+        protocol: &Guid,
+    ) -> EfiResult<Option<*const c_void>> {
+        let mut interface: *const c_void = ptr::null();
+        let interface_ptr = &mut interface as *mut _;
+        let result = unsafe { ((*self.0).locate_protocol)(protocol, ptr::null(), interface_ptr) }
+            .to_result();
+
+        match result {
+            Ok(()) => Ok(Some(interface)),
+            Err(StatusError::NotFound) => Ok(None),
             Err(e) => Err(e),
         }
     }
@@ -233,7 +249,11 @@ pub(crate) struct RawBootServices {
     // Library Services
     protocols_per_handle: *const c_void,
     locate_handle_buffer: *const c_void,
-    locate_protocol: *const c_void,
+    locate_protocol: unsafe extern "efiapi" fn(
+        protocol: *const Guid,
+        registration: *const c_void,
+        interface: *mut *const c_void,
+    ) -> Status,
     install_multiple_protocol_interfaces: *const c_void,
     uninstall_multiple_protocol_interfaces: *const c_void,
 
