@@ -14,7 +14,11 @@ pub static _ST: AtomicPtr<SystemTable> = AtomicPtr::new(ptr::null_mut());
 #[panic_handler]
 fn _panic_handler(panic_info: &core::panic::PanicInfo) -> ! {
     if _st_is_set() {
-        println!("panic occurred: {}", panic_info.message());
+        if let Some(loc) = panic_info.location() {
+            println!("panic occurred: {} ({})", panic_info.message(), loc);
+        } else {
+            println!("panic occurred: {}", panic_info.message());
+        }
     }
     loop {}
 }
