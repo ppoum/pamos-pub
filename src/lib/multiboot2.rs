@@ -1,4 +1,8 @@
+/// Definition for the fake MB2 protocol used by pamos is found in the pamOS repo,
+/// in src/boot/multiboot2.rs
 use core::ptr;
+
+const MB2_MAGIC: u32 = 0x36d76289;
 
 pub struct BootInformationWriter {
     base: *mut u8,
@@ -31,9 +35,7 @@ impl BootInformationWriter {
         };
 
         // Write header
-        s.write_u32(0); // total_size, replace when closing the Writer
-        s.write_u32(0); // reserved (always 0)
-
+        s.write_u32(MB2_MAGIC);
         s
     }
 
@@ -41,12 +43,6 @@ impl BootInformationWriter {
         // Write closing tag (type 0, size 8)
         self.write_u32(0);
         self.write_u32(8);
-
-        // Overwrite header to fix the total_size value
-        let written_bytes = self.index;
-        self.index = 0;
-        self.write_u32(written_bytes as u32);
-
         self.base
     }
 
@@ -63,5 +59,6 @@ impl BootInformationWriter {
         unsafe {
             ptr::copy_nonoverlapping(n.to_le_bytes().as_ptr(), self.base.add(self.index), 4);
         }
+        self.index += 4;
     }
 }

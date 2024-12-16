@@ -7,7 +7,7 @@ use lib::{
     cstr16, println,
     uefi::{
         boot_services::BootServices,
-        helper::{self, AllocatedPool},
+        helper::{self},
         protocols::{
             FileAttribute, FileMode, GraphicsOutputProtocol, LoadedImageProtocol, Protocol,
             ProtocolLocateError, SimpleFileSystemProtocol,
@@ -59,10 +59,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTa
     println!("I: Kernel file loaded");
 
     println!("I: Generating the MB2 info structure");
-    // Lazy: allocate a hard-coded 1000 bytes (will panic if the boot info is larger)
-    let mut buf =
-        AllocatedPool::<[u8]>::try_new(boot_services, 1000).expect("Error allocating MB2 buffer");
-    let mb2_ptr = kernel.generate_mb2_info(&mut buf);
+    let mb2_ptr = kernel.generate_mb2_info(boot_services);
     let pml4_ptr = kernel.initialize_paging_structures(boot_services);
 
     println!("I: Exiting boot services and entering kernel");
