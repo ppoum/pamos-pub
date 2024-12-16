@@ -20,11 +20,10 @@ use loader::ElfKernel;
 // Helper function for now
 fn unwrap_protocol_result<T>(res: Result<T, ProtocolLocateError>) -> T {
     match res {
-        Ok(p) => return p,
-        Err(ProtocolLocateError::Unsupported) => println!("Unsupported protocol"),
-        Err(ProtocolLocateError::Error(_)) => println!("Other error"),
-    };
-    panic!()
+        Ok(p) => p,
+        Err(ProtocolLocateError::Unsupported) => panic!("Unsupported protocol"),
+        Err(ProtocolLocateError::Error(_)) => panic!("Other error"),
+    }
 }
 
 #[no_mangle]
