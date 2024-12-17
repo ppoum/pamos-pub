@@ -2,6 +2,8 @@
 /// in src/boot/multiboot2.rs
 use core::ptr;
 
+use crate::uefi::protocols::{GraphicsOutputModeInfo, PixelFormat, ProtocolMode};
+
 const MB2_MAGIC: u32 = 0x36d76289;
 
 pub struct BootInformationWriter {
@@ -39,6 +41,31 @@ impl BootInformationWriter {
         s
     }
 
+    pub fn write_framebuffer_tag(
+        &mut self,
+        gop_info: &ProtocolMode,
+        current_mode: &GraphicsOutputModeInfo,
+    ) {
+        // Type & size
+        self.write_u32(0x1);
+        self.write_u32(32);
+
+        // Address
+        self.write_u64(gop_info.fb_base);
+
+        // Res (h,v) and scanline
+        self.write_u32(current_mode.horizontal_res);
+        self.write_u32(current_mode.vertical_res);
+        self.write_u32(current_mode.pixels_per_scanline);
+
+        // Pixel mode
+        match current_mode.pixel_format {
+            PixelFormat::RedGreenBlueReserved8BitPerColor => self.write_u32(0),
+            PixelFormat::BlueGreenRedReserved8BitPerColor => self.write_u32(1),
+            _ => panic!("Unsupported MB2 FB pixel mode"),
+        }
+    }
+
     pub fn close(mut self) -> *mut u8 {
         // Write closing tag (type 0, size 8)
         self.write_u32(0);
@@ -60,5 +87,15 @@ impl BootInformationWriter {
             ptr::copy_nonoverlapping(n.to_le_bytes().as_ptr(), self.base.add(self.index), 4);
         }
         self.index += 4;
+    }
+
+    fn write_u64(&mut self, n: u64) {
+        if (self.max_len - self.index) < 4 {
+            panic!("Tried to write MB2 BootInformation, but the buffer was full.");
+        }
+        unsafe {
+            ptr::copy_nonoverlapping(n.to_le_bytes().as_ptr(), self.base.add(self.index), 8);
+        }
+        self.index += 8;
     }
 }
