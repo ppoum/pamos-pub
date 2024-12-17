@@ -4,7 +4,9 @@
 mod loader;
 
 use lib::{
-    cstr16, println,
+    cstr16,
+    multiboot2::BootInformationWriter,
+    println,
     uefi::{
         boot_services::BootServices,
         helper::{self},
@@ -13,7 +15,7 @@ use lib::{
             ProtocolLocateError, SimpleFileSystemProtocol,
         },
         status::{EfiResult, Status, StatusError},
-        Handle, SystemTable,
+        AllocateType, Handle, SystemTable,
     },
 };
 use loader::ElfKernel;
@@ -56,10 +58,14 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTa
     let kernel = ElfKernel::load_from_file(kernel_file, system_table.boot_services())
         .expect("error reading kernel file");
 
-    println!("I: Kernel file loaded");
+    println!(
+        "I: Kernel file loaded (entry: {:#x})",
+        kernel.entrypoint_addr()
+    );
 
     println!("I: Generating the MB2 info structure");
-    let mb2_ptr = kernel.generate_mb2_info(boot_services);
+    let mb2_ptr =
+        generate_mb2_info_structure(&boot_services).expect("Error writing MB2 info structure");
     let pml4_ptr = kernel.initialize_paging_structures(boot_services);
 
     println!("I: Exiting boot services and entering kernel");
@@ -77,7 +83,7 @@ pub extern "efiapi" fn efi_main(image_handle: Handle, mut system_table: SystemTa
 
 /// Initialize the Graphics Output device (if required), and set the mode to the highest resolution
 /// available (where highest means largest pixel count).
-pub fn configure_framebuffer(boot_services: &BootServices) -> EfiResult<()> {
+fn configure_framebuffer(boot_services: &BootServices) -> EfiResult<()> {
     let graphics_protocol =
         unwrap_protocol_result(GraphicsOutputProtocol::try_locate(boot_services));
     // If mode is null, use mode number 0
@@ -122,4 +128,26 @@ pub fn configure_framebuffer(boot_services: &BootServices) -> EfiResult<()> {
     }
 
     Ok(())
+}
+
+fn generate_mb2_info_structure(boot_services: &BootServices) -> EfiResult<*mut u8> {
+    // Lazy: allocate a hard-coded 4096 bytes (will panic if the boot info is larger, unlikely)
+    let buf = boot_services
+        .leaky_allocate_pages(AllocateType::MaxAddress, 1, Some(0x80000))
+        .expect("Error allocating mb2 page");
+    // Safety: Writer is bounded by the buffer's allocation
+    let mut writer = unsafe { BootInformationWriter::new(buf as *mut u8, 4096) };
+
+    // Framebuffer tag
+    {
+        let gop =
+            GraphicsOutputProtocol::try_locate(boot_services).map_err(|_| StatusError::NotFound)?;
+        let gop_info = gop.mode().ok_or(StatusError::NotFound)?;
+        let current_mode = gop.query_mode(gop_info.mode)?;
+        writer.write_framebuffer_tag(gop_info, current_mode);
+    }
+
+    let mb2_ptr = writer.close();
+    println!("D: MB2 info ptr: {:p}", mb2_ptr);
+    Ok(mb2_ptr)
 }

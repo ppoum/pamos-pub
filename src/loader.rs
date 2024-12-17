@@ -176,7 +176,7 @@ impl ElfKernel {
         Ok(())
     }
 
-    fn entrypoint_addr(&self) -> u64 {
+    pub fn entrypoint_addr(&self) -> u64 {
         let v_entry = self.elf_header.e_entry;
 
         // Translate entrypoint from virtual to physical address
@@ -189,22 +189,6 @@ impl ElfKernel {
         }
 
         p_addr.expect("Could not convert kernel entrypoint to a physical address")
-    }
-
-    /// # Safety
-    /// This function will panic if the resulting MB2 structure is larger than the allocated
-    /// buffer.
-    pub fn generate_mb2_info(&self, boot_services: BootServices) -> *mut u8 {
-        // Generate the MB2 boot info
-        // Lazy: allocate a hard-coded 4096 bytes (will panic if the boot info is larger, unlikely)
-        let buf = boot_services
-            .leaky_allocate_pages(AllocateType::MaxAddress, 1, Some(0x20000))
-            .expect("Error allocating mb2 page");
-        // Safety: Writer is bounded by the buffer's allocation
-        let writer = unsafe { BootInformationWriter::new(buf as *mut u8, 4096) };
-        let mb2_ptr = writer.close();
-        println!("D: MB2 info ptr: {:p}", mb2_ptr);
-        mb2_ptr
     }
 
     pub fn call_mb2_entrypoint(&self, mb2_ptr: *mut u8, pml4_ptr: *mut Pml4) -> ! {

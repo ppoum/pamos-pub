@@ -8,6 +8,7 @@ pub use media::*;
 
 use super::{boot_services::BootServices, status::StatusError, Guid, Handle};
 
+#[derive(Debug)]
 pub enum ProtocolLocateError {
     Unsupported,
     Error(StatusError),
