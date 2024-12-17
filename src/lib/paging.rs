@@ -21,7 +21,7 @@ impl Pml4 {
     /// Allocates a new PML4 table and fill it out with 0s
     pub fn new_allocate_empty(boot_services: BootServices) -> &'static mut Self {
         let pml4_page_base = boot_services
-            .leaky_allocate_pages(AllocateType::MaxAddress, 1, Some(0x20000))
+            .leaky_allocate_pages(AllocateType::MaxAddress, 1, Some(0x80000))
             .unwrap();
         let pml4 = pml4_page_base as *mut Self;
 
@@ -52,7 +52,7 @@ pub struct PdpTable {
 impl PdpTable {
     pub fn new_allocate_empty(boot_services: BootServices) -> &'static mut Self {
         let pdpt_page_base = boot_services
-            .leaky_allocate_pages(AllocateType::MaxAddress, 1, Some(0x20000))
+            .leaky_allocate_pages(AllocateType::MaxAddress, 1, Some(0x80000))
             .unwrap();
         let pdpt = pdpt_page_base as *mut Self;
 
@@ -91,7 +91,7 @@ pub struct PageDirectory {
 impl PageDirectory {
     pub fn new_allocate_empty(boot_services: BootServices) -> &'static mut Self {
         let pd_page_base = boot_services
-            .leaky_allocate_pages(AllocateType::MaxAddress, 1, Some(0x20000))
+            .leaky_allocate_pages(AllocateType::MaxAddress, 1, Some(0x80000))
             .unwrap();
         let pd = pd_page_base as *mut Self;
 
@@ -130,7 +130,7 @@ pub struct PageTable {
 impl PageTable {
     pub fn new_allocate_empty(boot_services: BootServices) -> &'static mut Self {
         let pt_page_base = boot_services
-            .leaky_allocate_pages(AllocateType::MaxAddress, 1, Some(0x20000))
+            .leaky_allocate_pages(AllocateType::MaxAddress, 1, Some(0x80000))
             .unwrap();
         let pt = pt_page_base as *mut Self;
 

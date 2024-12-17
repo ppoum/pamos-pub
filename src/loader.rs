@@ -251,11 +251,11 @@ impl ElfKernel {
             }
         }
 
-        // Stack & heap (0x20000 to 0x28000)
+        // Stack & heap (0x80000 to 0x88000)
         let base = boot_services
-            .leaky_allocate_pages(AllocateType::Address, 8, Some(0x20000))
+            .leaky_allocate_pages(AllocateType::Address, 8, Some(0x80000))
             .expect("Error allocating stack memory page");
-        paging::map_range(boot_services, pml4, 0x20000, base, 8);
+        paging::map_range(boot_services, pml4, 0x80000, base, 8);
 
         pml4
     }
