@@ -2,12 +2,14 @@ use core::{arch::asm, ffi::c_void, fmt::Display};
 
 use lib::{
     elf::{Elf64Ehdr, Elf64Phdr, ElfClass, ElfDataLayout, ElfMachine, ElfSegmentType, ElfType},
-    multiboot2::BootInformationWriter,
     paging::{self, Pml4},
     println,
     uefi::{
-        boot_services::BootServices, helper::AllocatedPool, protocols::FileProtocol,
-        status::StatusError, AllocateType,
+        boot_services::BootServices,
+        helper::AllocatedPool,
+        protocols::{FileProtocol, GraphicsOutputProtocol, Protocol},
+        status::StatusError,
+        AllocateType,
     },
 };
 
@@ -256,6 +258,15 @@ impl ElfKernel {
             .leaky_allocate_pages(AllocateType::Address, 8, Some(0x80000))
             .expect("Error allocating stack memory page");
         paging::map_range(boot_services, pml4, 0x80000, base, 8);
+        // Frame buffer (dynamic)
+        {
+            let gop = GraphicsOutputProtocol::try_locate(&boot_services).unwrap();
+            let gop_info = gop.mode().expect("GOP should be configured by now");
+            let addr = gop_info.fb_base;
+            assert!(addr % 0x1000 == 0);
+            let len = gop_info.fb_size.div_ceil(0x1000);
+            paging::map_range(boot_services, pml4, addr, addr, len as u64);
+        }
 
         pml4
     }
