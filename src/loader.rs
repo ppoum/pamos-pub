@@ -13,6 +13,8 @@ use lib::{
     },
 };
 
+const MEM_FOUR_MB_ADDR: u64 = 0x400000;
+
 #[derive(Debug)]
 pub enum KernelHeaderValidationError {
     EfiError(StatusError),
@@ -78,6 +80,7 @@ pub struct ElfKernel {
     _program_headers: AllocatedPool<[Elf64Phdr]>,
     // Maps of virtual addr to physical addr
     map_entries: AllocatedPool<[LoaderMapEntry]>,
+    map_entry_count: usize,
 }
 
 impl ElfKernel {
@@ -112,7 +115,8 @@ impl ElfKernel {
             boot_services,
             ehdr.program_header_count() as usize,
         )?;
-        for (i, phdr) in program_headers.iter().enumerate() {
+        let mut map_entry_count = 0;
+        for phdr in program_headers.iter() {
             if phdr.p_type() != ElfSegmentType::Load {
                 // Segment does not need to be loaded into memory
                 continue;
@@ -124,18 +128,26 @@ impl ElfKernel {
             // Difference between the segment's base address (vaddr) and the virtual page's base
             // address.
             let page_offset = phdr.p_vaddr - page_aligned_base;
-            let page_base = boot_services.leaky_allocate_pages(
-                AllocateType::MaxAddress,
-                page_count,
-                Some(0x18000),
-            )?;
+
+            let page_base = if page_aligned_base < MEM_FOUR_MB_ADDR {
+                // If v_addr in first 4MB, load into 0-4MB to make use of identity mapping.
+                boot_services.leaky_allocate_pages(
+                    AllocateType::MaxAddress,
+                    page_count,
+                    Some(MEM_FOUR_MB_ADDR),
+                )?
+            } else {
+                // Map anywhere
+                boot_services.leaky_allocate_pages(AllocateType::AnyPages, page_count, None)?
+            };
 
             // Register page map requirement
-            map_entries.as_mut()[i] = LoaderMapEntry {
+            map_entries.as_mut()[map_entry_count] = LoaderMapEntry {
                 v_addr: page_aligned_base,
                 len: page_count as u64 * 0x1000,
                 p_addr: page_base,
             };
+            map_entry_count += 1;
 
             // Load segment into allocated page(s) (with the proper offset into the page)
             file.set_position(phdr.p_offset)?;
@@ -149,6 +161,7 @@ impl ElfKernel {
             elf_header: ehdr,
             _program_headers: program_headers_pool,
             map_entries,
+            map_entry_count,
         })
     }
 
@@ -216,12 +229,9 @@ impl ElfKernel {
         // Identity map the first 4MB
         paging::map_range(boot_services, pml4, 0x0, 0x0, 1024);
 
-        // Upper half mapping
-        for loader_map_entry in self.map_entries.as_ref() {
-            // Only create new page maps for higher half mappings (This assumes that all the code
-            // not found in the higher half is already identity map. This is currently true, as it
-            // only includes the bootstrapping assembly code)
-            if loader_map_entry.v_addr >= 0xFFFF800000000000 {
+        // Map remainder
+        for loader_map_entry in &self.map_entries.as_ref()[0..self.map_entry_count] {
+            if loader_map_entry.v_addr >= MEM_FOUR_MB_ADDR {
                 let page_cnt = loader_map_entry.len / 0x1000;
                 println!(
                     "D: Mapping {:#x} to {:#x} ({})",
@@ -239,7 +249,7 @@ impl ElfKernel {
 
         // Stack & heap (0x80000 to 0x88000)
         let base = boot_services
-            .leaky_allocate_pages(AllocateType::Address, 8, Some(0x80000))
+            .leaky_allocate_pages(AllocateType::AnyPages, 8, None)
             .expect("Error allocating stack memory page");
         paging::map_range(boot_services, pml4, 0x80000, base, 8);
         // Frame buffer (dynamic)
